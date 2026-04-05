@@ -991,6 +991,16 @@ function isAnySubmitted(phaseResponses, participants, role) {
   return getRoleEntries(phaseResponses, participants, role).some(e => e.submitted);
 }
 
+
+// ═══════════════════════════════════════════════════════
+//  KEYWORD MATCH (띄어쓰기 무시 비교)
+// ═══════════════════════════════════════════════════════
+function kwMatch(text, kw) {
+  const normalize = s => s.replace(/\s/g, '');
+  const kwBase = normalize(kw.split('·')[0].replace(/[·\/]/g, ''));
+  const textNorm = normalize(text);
+  return textNorm.includes(kwBase);
+}
 // ═══════════════════════════════════════════════════════
 //  ACTIVE SESSION STATE
 // ═══════════════════════════════════════════════════════
@@ -1869,7 +1879,7 @@ function buildInlineFeedbackHtml(phase, phaseResponses, participants) {
     const multi = entries.length > 1 && !entries[0].isProxy;
     return entries.map(e => {
       const isMe = e.key === getRKey();
-      const found = mission.keywords.filter(kw => e.text.includes(kw.split('·')[0].replace(/[·\/]/g,'').substring(0,4)));
+      const found = mission.keywords.filter(kw => kwMatch(e.text, kw));
       const score = mission.keywords.length > 0 ? Math.round(found.length / mission.keywords.length * 100) : 100;
       const scoreClass = score >= 80 ? 'score-high' : score >= 50 ? 'score-mid' : 'score-low';
       const nameTag = e.isProxy ? '(대리입력)' : multi ? `(${e.name})` : '';
@@ -1883,7 +1893,7 @@ function buildInlineFeedbackHtml(phase, phaseResponses, participants) {
           </div>
           <div class="fb-section"><h4>📝 작성 내용</h4><p class="${!e.text?'empty':''}">${e.text?escapeHtml(e.text):'작성 내용 없음'}</p></div>
           <div class="fb-section"><h4>✅ 키워드 확인</h4>
-            <div class="keyword-check">${mission.keywords.map(kw=>{const hit=e.text.includes(kw.split('·')[0].replace(/[·\/]/g,'').substring(0,4));return`<span class="${hit?'kw-found':'kw-miss'}">${hit?'✓':'✗'} ${kw}</span>`;}).join('')}</div>
+            <div class="keyword-check">${mission.keywords.map(kw=>{const hit=kwMatch(e.text, kw);return`<span class="${hit?'kw-found':'kw-miss'}">${hit?'✓':'✗'} ${kw}</span>`;}).join('')}</div>
           </div>
           <div class="fb-section"><h4>📌 모범 답안</h4><p style="font-size:12px;color:#555;line-height:1.7">${escapeHtml(mission.answer)}</p></div>
         </div>`;
@@ -1908,7 +1918,7 @@ function renderPhaseFeedback(body, state) {
     const multi = entries.length > 1 && !entries[0].isProxy;
     return entries.map(e => {
       const isMe = e.key === getRKey();
-      const found = mission.keywords.filter(kw => e.text.includes(kw.split('·')[0].replace(/[·\/]/g,'').substring(0,4)));
+      const found = mission.keywords.filter(kw => kwMatch(e.text, kw));
       const score = mission.keywords.length > 0 ? Math.round(found.length / mission.keywords.length * 100) : 100;
       const scoreClass = score >= 80 ? 'score-high' : score >= 50 ? 'score-mid' : 'score-low';
       const nameTag = e.isProxy ? '(대리입력)' : multi ? `(${e.name})` : '';
@@ -1922,7 +1932,7 @@ function renderPhaseFeedback(body, state) {
           </div>
           <div class="fb-section"><h4>📝 작성 내용</h4><p class="${!e.text?'empty':''}">${e.text?escapeHtml(e.text):'작성 내용 없음'}</p></div>
           <div class="fb-section"><h4>✅ 키워드 확인</h4>
-            <div class="keyword-check">${mission.keywords.map(kw=>{const hit=e.text.includes(kw.split('·')[0].replace(/[·\/]/g,'').substring(0,4));return`<span class="${hit?'kw-found':'kw-miss'}">${hit?'✓':'✗'} ${kw}</span>`;}).join('')}</div>
+            <div class="keyword-check">${mission.keywords.map(kw=>{const hit=kwMatch(e.text, kw);return`<span class="${hit?'kw-found':'kw-miss'}">${hit?'✓':'✗'} ${kw}</span>`;}).join('')}</div>
           </div>
           <div class="fb-section"><h4>📌 모범 답안</h4><p style="font-size:12px;color:#555;line-height:1.7">${escapeHtml(mission.answer)}</p></div>
         </div>`;
@@ -2137,7 +2147,7 @@ function renderFeedback() {
             const submitted = e.submitted || false;
             const isProxy = e.isProxy || false;
             const nameTag = multi ? ` <span style="font-size:12px;font-weight:400;opacity:0.8">(${e.name})</span>` : '';
-            const found = mission.keywords.filter(kw => text.includes(kw.split('·')[0].replace(/[·\/]/g,'').substring(0,4)));
+            const found = mission.keywords.filter(kw => kwMatch(text, kw));
             const score = mission.keywords.length > 0 ? Math.round(found.length / mission.keywords.length * 100) : 100;
             const scoreClass = score >= 80 ? 'score-high' : score >= 50 ? 'score-mid' : 'score-low';
             return `<div class="fb-card">
@@ -2150,7 +2160,7 @@ function renderFeedback() {
                 <p class="${!text?'empty':''}">${text?escapeHtml(text):'작성 내용 없음'}</p>
               </div>
               <div class="fb-section"><h4>✅ 정답 키워드 확인</h4>
-                <div class="keyword-check">${mission.keywords.map(kw=>{const hit=text.includes(kw.split('·')[0].replace(/[·\/]/g,'').substring(0,4));return`<span class="${hit?'kw-found':'kw-miss'}">${hit?'✓':'✗'} ${kw}</span>`;}).join('')}</div>
+                <div class="keyword-check">${mission.keywords.map(kw=>{const hit=kwMatch(text, kw);return`<span class="${hit?'kw-found':'kw-miss'}">${hit?'✓':'✗'} ${kw}</span>`;}).join('')}</div>
               </div>
               <div class="fb-section"><h4>📌 모범 답안</h4><p style="font-size:12px;color:#555">${escapeHtml(mission.answer)}</p></div>
             </div>`;
