@@ -949,6 +949,27 @@ function renderAdminGroupCount() {
 const ROLE_ICONS = {
   '모더레이터': '🎙️', '담임교사': '📚', '보건교사': '🩺', '행정실': '📋', '교장/교감': '🏛️'
 };
+const DISPLAY_ROLES = ['담임교사', '보건교사', '행정실', '교장/교감'];
+const PARTICIPANT_ROLES = ['모더레이터', '담임교사', '보건교사', '행정실', '교장/교감'];
+function getBaseRole(role) { return role; }
+// 개인 응답 키: "역할:이름"
+function getRKey() { return `${myRole}:${myName}`; }
+// 특정 역할의 모든 참가자 응답 목록 반환
+function getRoleEntries(phaseResponses, participants, role) {
+  const people = Object.values(participants).filter(p => p.role === role);
+  if (people.length === 0) {
+    // 프록시 응답
+    return [{ name: null, key: role, text: phaseResponses[role] || '', submitted: phaseResponses[`${role}_submitted`] || false, isProxy: phaseResponses[`${role}_proxy`] || false }];
+  }
+  return people.map(p => {
+    const k = `${role}:${p.name}`;
+    return { name: p.name, key: k, text: phaseResponses[k] || '', submitted: phaseResponses[`${k}_submitted`] || false, isProxy: false };
+  });
+}
+// 역할 전체 제출 여부 (1명 이상 제출)
+function isAnySubmitted(phaseResponses, participants, role) {
+  return getRoleEntries(phaseResponses, participants, role).some(e => e.submitted);
+}
 
 // ═══════════════════════════════════════════════════════
 //  ACTIVE SESSION STATE
@@ -1027,10 +1048,10 @@ function goHome() {
 
 function leaveToLogin() {
   // 참가자 목록에서 나를 제거
-  if (myRole && STORAGE_KEY) {
+  if (myName && STORAGE_KEY) {
     const state = getState();
-    if (state.participants && state.participants[myRole]) {
-      delete state.participants[myRole];
+    if (state.participants && state.participants[myName]) {
+      delete state.participants[myName];
       saveState(state);
       broadcast('STATE_CHANGED', {});
     }
@@ -1073,7 +1094,7 @@ function getState() {
   catch { return defaultState(); }
 }
 function defaultState() {
-  return { currentPhase: 0, phaseStartTime: null, timerRunning: false, showingFeedback: false, participants: {}, responses: {} };
+  return { currentPhase: 0, phaseStartTime: null, timerRunning: false, timerPaused: false, timerPausedRemaining: null, showingFeedback: false, participants: {}, responses: {}, roleAnnouncement: null };
 }
 function saveState(state) { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
 function broadcast(type, data) { if (channel) channel.postMessage({ type, data, from: myRole }); }
@@ -1111,9 +1132,10 @@ document.getElementById('btn-join').addEventListener('click', () => {
   const name = document.getElementById('input-name').value.trim();
   if (!name || !selectedRole) return;
   myName = name; myRole = selectedRole;
+  participantsPanelOpen = (myRole === '모더레이터');
   initChannel();
   const state = getState();
-  state.participants[myRole] = { name: myName, joinedAt: Date.now() };
+  state.participants[myName] = { role: myRole, name: myName, joinedAt: Date.now() };
   saveState(state);
   broadcast('STATE_CHANGED', {});
   document.getElementById('screen-login').style.display = 'none';
@@ -1147,11 +1169,14 @@ function startPolling() {
 // ═══════════════════════════════════════════════════════
 function getTimeRemaining() {
   const state = getState();
-  if (!state.phaseStartTime || !state.timerRunning) return null;
+  if (!state.timerRunning) return null;
+  if (state.timerPaused) return state.timerPausedRemaining != null ? state.timerPausedRemaining : 0;
+  if (!state.phaseStartTime) return null;
   const phase = ACTIVE_PHASES[state.currentPhase - 1];
   if (!phase) return null;
   const elapsed = Math.floor((Date.now() - state.phaseStartTime) / 1000);
-  return Math.max(0, phase.duration - elapsed);
+  const duration = state.phaseDuration != null ? state.phaseDuration : phase.duration;
+  return Math.max(0, duration - elapsed);
 }
 function formatTime(seconds) {
   if (seconds === null || seconds === undefined) return '05:00';
@@ -1166,12 +1191,13 @@ function updateTimerDisplay() {
   const remaining = getTimeRemaining();
   if (remaining === null) {
     const phase = ACTIVE_PHASES[state.currentPhase - 1];
-    el.textContent = phase ? formatTime(phase.duration) : '05:00';
+    const dur = state.phaseDuration != null ? state.phaseDuration : (phase ? phase.duration : 300);
+    el.textContent = formatTime(dur);
     el.classList.remove('urgent'); return;
   }
   el.textContent = formatTime(remaining);
   el.classList.toggle('urgent', remaining <= 60 && remaining > 0);
-  if (remaining === 0 && myRole === '모더레이터' && state.timerRunning) {
+  if (remaining === 0 && myRole === '모더레이터' && state.timerRunning && !state.timerPaused) {
     const s = getState(); s.timerRunning = false; s.showingFeedback = true;
     saveState(s); broadcast('PHASE_CHANGE', {});
   }
@@ -1187,6 +1213,15 @@ startTimerLoop();
 // ═══════════════════════════════════════════════════════
 function renderExercise() {
   const state = getState();
+  // 역할 재배정 공지가 적용된 경우 myRole 자동 동기화
+  if (myName && state.participants && state.participants[myName]) {
+    const assignedRole = state.participants[myName].role;
+    if (assignedRole && assignedRole !== myRole) {
+      myRole = assignedRole;
+      const hdr = document.getElementById('my-role-header');
+      if (hdr) hdr.textContent = `역할: ${ROLE_ICONS[myRole]||''} ${myRole} (${myName})`;
+    }
+  }
   updatePhaseBar(state);
   updatePhaseBadge(state);
   renderBody(state);
@@ -1221,10 +1256,10 @@ function renderBody(state) {
 
 function renderLobby(body, state) {
   const participants = state.participants || {};
-  const pList = Object.entries(participants).map(([role, info]) =>
+  const pList = Object.values(participants).map(info =>
     `<div class="participant-item">
       <div class="p-dot online"></div>
-      <div><div>${ROLE_ICONS[role]||''} ${role}</div><div class="p-role">${info.name}</div></div>
+      <div><div>${ROLE_ICONS[info.role]||''} ${info.role}</div><div class="p-role">${info.name}</div></div>
     </div>`
   ).join('');
 
@@ -1235,7 +1270,7 @@ function renderLobby(body, state) {
       <p>참가자들이 각자의 역할로 접속하면 훈련을 시작해 주세요.</p>
       <div style="margin:20px 0"><div class="my-role-display">모더레이터 · ${myName}</div></div>
       <div class="waiting-participants">
-        <h4>현재 접속 참가자 (${Object.keys(participants).length}명)</h4>
+        <h4>현재 접속 참가자 (${Object.values(participants).length}명)</h4>
         <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden">
           ${pList || '<div style="padding:16px;text-align:center;color:var(--muted);font-size:13px">아직 참가자가 없습니다</div>'}
         </div>
@@ -1263,42 +1298,116 @@ function renderLobby(body, state) {
   }
 }
 
-function toggleScenarioPanel() {
-  const content = document.getElementById('scenario-body-content');
-  const icon = document.getElementById('scenario-toggle-icon');
-  if (!content) return;
-  if (content.style.display === 'none') {
-    content.style.display = '';
-    if (icon) icon.textContent = '▲';
-  } else {
-    content.style.display = 'none';
-    if (icon) icon.textContent = '▼';
-  }
+let participantsPanelOpen = false;
+function toggleParticipantsPanel() {
+  participantsPanelOpen = !participantsPanelOpen;
+  const content = document.getElementById('participants-body-content');
+  const icon = document.getElementById('participants-toggle-icon');
+  if (content) content.style.display = participantsPanelOpen ? '' : 'none';
+  if (icon) icon.textContent = participantsPanelOpen ? '▲' : '▼';
+}
+
+function renderRoleReassignPanel(state) {
+  const participants = state.participants || {};
+  const nonMod = Object.values(participants).filter(p => p.role !== '모더레이터');
+  if (!nonMod.length) return '';
+  const rows = nonMod.map(info => `
+    <tr>
+      <td style="padding:8px 12px;font-size:13px">${escapeHtml(info.name)}</td>
+      <td style="padding:8px 12px;font-size:13px">${ROLE_ICONS[info.role]||''} ${info.role}</td>
+      <td style="padding:8px 12px">
+        <select class="role-reassign-select" data-name="${escapeHtml(info.name)}" style="padding:5px 8px;border:2px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit">
+          ${DISPLAY_ROLES.map(r=>`<option value="${r}" ${r===info.role?'selected':''}>${r}</option>`).join('')}
+        </select>
+      </td>
+    </tr>`).join('');
+  return `
+    <div style="background:white;border-radius:var(--radius);box-shadow:var(--shadow);padding:18px 20px;margin-bottom:16px;border-left:4px solid #f39c12">
+      <h4 style="font-size:14px;font-weight:700;color:#e67e22;margin-bottom:10px">🔄 역할 재배정</h4>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:12px">다음 단계를 위해 역할을 재배정하고 참가자들에게 공지하세요.</p>
+      <table style="width:100%;border-collapse:collapse;background:#f7f9fc;border-radius:8px;overflow:hidden">
+        <thead><tr style="background:var(--border)">
+          <th style="padding:8px 12px;font-size:12px;text-align:left;font-weight:600">이름</th>
+          <th style="padding:8px 12px;font-size:12px;text-align:left;font-weight:600">현재 역할</th>
+          <th style="padding:8px 12px;font-size:12px;text-align:left;font-weight:600">다음 역할</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
+        <button onclick="announceRoleChange()" style="padding:9px 20px;background:#e67e22;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">📢 역할 재배정 공지하기</button>
+        ${state.roleAnnouncement?`<button onclick="clearRoleAnnouncement()" style="padding:9px 16px;background:white;color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;font-family:inherit">공지 취소</button>`:''}
+      </div>
+    </div>`;
+}
+
+function renderRoleAnnouncementBanner(state) {
+  if (!state.roleAnnouncement) return '';
+  const rows = Object.entries(state.roleAnnouncement.assignments).map(([name, role]) => `
+    <tr>
+      <td style="padding:6px 10px;font-size:13px">${escapeHtml(name)}</td>
+      <td style="padding:6px 10px;font-size:13px;font-weight:700">${ROLE_ICONS[role]||''} ${role}</td>
+    </tr>`).join('');
+  return `
+    <div style="background:#fff8e1;border:2px solid #f39c12;border-radius:var(--radius);padding:16px 20px;margin-bottom:16px">
+      <h4 style="font-size:14px;font-weight:700;color:#e67e22;margin-bottom:10px">📢 역할 재배정 공지</h4>
+      <p style="font-size:12px;color:#7f6000;margin-bottom:10px">모더레이터가 다음 단계 역할을 재배정했습니다. 아래 안내에 따라 역할을 변경해 주세요.</p>
+      <table style="border-collapse:collapse;background:rgba(243,156,18,0.08);border-radius:6px;overflow:hidden">
+        <thead><tr style="background:rgba(243,156,18,0.2)">
+          <th style="padding:6px 10px;font-size:12px;text-align:left;font-weight:600">이름</th>
+          <th style="padding:6px 10px;font-size:12px;text-align:left;font-weight:600">다음 역할</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function announceRoleChange() {
+  const assignments = {};
+  document.querySelectorAll('.role-reassign-select').forEach(sel => {
+    assignments[sel.dataset.name] = sel.value;
+  });
+  const state = getState();
+  state.roleAnnouncement = { assignments, timestamp: Date.now() };
+  saveState(state);
+  broadcast('STATE_CHANGED', {});
+  renderExercise();
+}
+
+function clearRoleAnnouncement() {
+  const state = getState();
+  state.roleAnnouncement = null;
+  saveState(state);
+  broadcast('STATE_CHANGED', {});
+  renderExercise();
 }
 
 function renderPhase(body, state) {
   const phase = ACTIVE_PHASES[state.currentPhase - 1];
   const responses = state.responses || {};
   const phaseResponses = responses[`phase${state.currentPhase}`] || {};
-  const myResponse = phaseResponses[myRole] || '';
-  const submitted = phaseResponses[`${myRole}_submitted`] || false;
-  const myMission = phase.missions[myRole];
+  const myResponse = phaseResponses[getRKey()] || '';
+  const submitted = phaseResponses[`${getRKey()}_submitted`] || false;
+  const myMission = phase.missions[getBaseRole(myRole)];
 
   const scenarioHtml = `
     <div class="scenario-panel">
       <div class="scenario-card">
-        <div class="scenario-header ${phase.colorClass}" onclick="toggleScenarioPanel()" style="cursor:pointer;user-select:none">
+        <div class="scenario-header ${phase.colorClass}">
           ${phase.emoji} ${state.currentPhase}단계 상황
-          <span id="scenario-toggle-icon" style="margin-left:auto;font-size:11px;opacity:0.8">▲</span>
         </div>
-        <div class="scenario-body" id="scenario-body-content">
+        <div class="scenario-body">
           <div class="date-tag">📅 ${phase.date}</div>
           <p>${phase.situation}</p>
         </div>
       </div>
       <div class="participants-card">
-        <h3>👥 참가자 현황</h3>
-        ${renderParticipantsList(state, state.currentPhase)}
+        <h3 style="cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between" onclick="toggleParticipantsPanel()">
+          <span>👥 참가자 현황</span>
+          <span id="participants-toggle-icon" style="font-size:11px;opacity:0.8">${participantsPanelOpen?'▲':'▼'}</span>
+        </h3>
+        <div id="participants-body-content" style="display:${participantsPanelOpen?'':'none'}">
+          ${renderParticipantsList(state, state.currentPhase)}
+        </div>
       </div>
     </div>`;
 
@@ -1308,7 +1417,15 @@ function renderPhase(body, state) {
       <div class="work-area">
         <div class="moderator-panel-card">
           <h3>🎙️ 진행자 컨트롤 패널</h3>
-          <p style="font-size:13px;color:var(--muted);margin-bottom:14px">타이머를 시작하거나 단계를 진행합니다.</p>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:10px">타이머를 시작하거나 단계를 진행합니다.</p>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;background:#f7f9fc;border-radius:8px;padding:8px 12px">
+            <span style="font-size:13px;font-weight:600;color:var(--muted)">⏱ 단계 시간</span>
+            <button onclick="changeDuration(-1)" style="width:28px;height:28px;border:2px solid var(--border);border-radius:6px;background:white;font-size:16px;font-weight:700;cursor:pointer;color:var(--primary);display:flex;align-items:center;justify-content:center" ${state.timerRunning?'disabled':''}>−</button>
+            <input type="number" id="duration-input" value="${Math.round((state.phaseDuration != null ? state.phaseDuration : phase.duration) / 60)}" min="1" max="60" style="width:52px;padding:4px 6px;border:2px solid var(--border);border-radius:6px;font-size:15px;font-weight:700;font-family:inherit;text-align:center;color:var(--primary)" ${state.timerRunning?'disabled':''}>
+            <button onclick="changeDuration(1)" style="width:28px;height:28px;border:2px solid var(--border);border-radius:6px;background:white;font-size:16px;font-weight:700;cursor:pointer;color:var(--primary);display:flex;align-items:center;justify-content:center" ${state.timerRunning?'disabled':''}>+</button>
+            <span style="font-size:13px;color:var(--muted)">분</span>
+            ${state.timerRunning ? '<span style="font-size:12px;color:#e67e22;margin-left:4px">⏳ 타이머 진행 중</span>' : ''}
+          </div>
           <div class="ctrl-row">
             ${state.currentPhase > 0 ? `<button class="btn-prev-phase" onclick="prevPhase()">◀ 이전 단계</button>` : ''}
             ${state.timerRunning
@@ -1316,11 +1433,10 @@ function renderPhase(body, state) {
               : `<button class="btn-start-timer" onclick="startTimer()">▶ 타이머 시작</button>
                  <button class="btn-next-phase" onclick="nextPhase()">💡 피드백 보기</button>`}
           </div>
-        </div>
-        ${renderProxySection(phase, phaseResponses, state.participants || {})}
-        <div>
-          <h3 style="font-size:15px;font-weight:700;margin-bottom:12px">📝 전체 작성 현황</h3>
-          <div class="responses-grid">${renderAllRoleCards(phase, phaseResponses, '')}</div>
+          <div style="margin-top:14px;padding-top:12px;border-top:1px solid #f5e0c0">
+            <button onclick="resetAll()" style="padding:8px 18px;background:white;color:#c0392b;border:2px solid #c0392b;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all 0.2s" onmouseover="this.style.background='#c0392b';this.style.color='white'" onmouseout="this.style.background='white';this.style.color='#c0392b'">🔄 훈련 초기화</button>
+            <span style="font-size:11px;color:var(--muted);margin-left:8px">모든 응답이 삭제되고 처음부터 다시 시작됩니다</span>
+          </div>
         </div>
       </div>`;
   } else if (!myMission) {
@@ -1331,7 +1447,7 @@ function renderPhase(body, state) {
           <p style="font-size:16px;font-weight:700;color:var(--primary);margin-bottom:8px">이 단계에서 ${myRole}의 직접 미션은 없습니다</p>
           <p style="font-size:14px;line-height:1.7">다른 역할의 작성 내용을 확인하면서 상황을 파악하세요.</p>
         </div>
-        <div class="responses-grid">${renderAllRoleCards(phase, phaseResponses, myRole)}</div>
+        <div class="responses-grid">${renderAllRoleCards(phase, phaseResponses, getRKey(), state.participants||{})}</div>
       </div>`;
   } else {
     workHtml = `
@@ -1351,22 +1467,35 @@ function renderPhase(body, state) {
           </div>
           <div class="submit-row">
             ${submitted
-              ? `<button class="btn-submit submitted" disabled>✅ 제출 완료</button>`
+              ? `<button class="btn-submit submitted" disabled>✅ 제출 완료</button>
+                 <button class="btn-submit" onclick="editResponse()" style="background:white;color:var(--primary);border:2px solid var(--primary);" onmouseover="this.style.background='#f0f6ff'" onmouseout="this.style.background='white'">✏️ 수정하기</button>`
               : `<button class="btn-submit" onclick="submitResponse()" ${!state.timerRunning?'disabled':''}>제출하기</button>`}
           </div>
         </div>
         <div>
           <h3 style="font-size:15px;font-weight:700;margin-bottom:12px">📝 다른 역할 작성 현황</h3>
-          <div class="responses-grid">${renderAllRoleCards(phase, phaseResponses, myRole)}</div>
+          <div class="responses-grid">${renderAllRoleCards(phase, phaseResponses, getRKey(), state.participants||{})}</div>
         </div>
       </div>`;
   }
 
   body.innerHTML = scenarioHtml + workHtml;
 
+  // 역할 재배정 공지 배너 삽입 (모든 역할에게 표시)
+  if (state.roleAnnouncement) {
+    const workAreaEl = body.querySelector('.work-area');
+    if (workAreaEl) workAreaEl.insertAdjacentHTML('afterbegin', renderRoleAnnouncementBanner(state));
+  }
+
   if (submitted || myRole === '모더레이터' || !state.timerRunning) {
     const workAreaEl = body.querySelector('.work-area');
-    if (workAreaEl) workAreaEl.insertAdjacentHTML('beforeend', buildInlineFeedbackHtml(phase, phaseResponses));
+    if (workAreaEl) {
+      workAreaEl.insertAdjacentHTML('beforeend', buildInlineFeedbackHtml(phase, phaseResponses, state.participants||{}));
+      if (myRole === '모더레이터') {
+        const proxyHtml = renderProxySection(phase, phaseResponses, state.participants || {});
+        if (proxyHtml) workAreaEl.insertAdjacentHTML('beforeend', proxyHtml);
+      }
+    }
   }
 
   // Attach textarea live-save
@@ -1383,11 +1512,11 @@ function renderPhase(body, state) {
 
 // ── PROXY SECTION ──
 function renderProxySection(phase, phaseResponses, participants) {
-  const missingRoles = Object.keys(phase.missions).filter(r => !participants[r]);
+  const missingRoles = DISPLAY_ROLES.filter(r => !Object.values(participants).some(p => p.role === r));
   if (!missingRoles.length) return '';
 
   const items = missingRoles.map(role => {
-    const mission = phase.missions[role];
+    const mission = phase.missions[getBaseRole(role)];
     const text = phaseResponses[role] || '';
     const isSubmitted = phaseResponses[`${role}_submitted`] && phaseResponses[`${role}_proxy`];
     const textareaId = `proxy-ta-${role.replace(/\//g,'-')}`;
@@ -1505,29 +1634,34 @@ function editProxy(role) {
   renderExercise();
 }
 
-function buildInlineFeedbackHtml(phase, phaseResponses) {
-  const cards = Object.entries(phase.missions).map(([role, mission]) => {
-    const text = phaseResponses[role] || '';
-    const found = mission.keywords.filter(kw => text.includes(kw.split('·')[0].replace(/[·\/]/g,'').substring(0,4)));
-    const score = mission.keywords.length > 0 ? Math.round(found.length / mission.keywords.length * 100) : 100;
-    const scoreClass = score >= 80 ? 'score-high' : score >= 50 ? 'score-mid' : 'score-low';
-    const isMe = role === myRole;
-    const isProxy = phaseResponses[`${role}_proxy`];
-    return `
-      <div class="fb-card ${isMe?'my-fb-card':''}">
-        <div class="fb-card-header">
-          ${ROLE_ICONS[role]||''} ${role}
-          ${isMe ? '<span style="font-size:11px;opacity:0.8;margin-left:4px">(나)</span>' : ''}
-          ${isProxy ? '<span style="font-size:11px;opacity:0.8;margin-left:4px">(대리입력)</span>' : ''}
-          <span class="score-badge ${scoreClass}" style="float:right">${score}점</span>
-        </div>
-        <div class="fb-section"><h4>📝 작성 내용</h4><p class="${!text?'empty':''}">${text?escapeHtml(text):'작성 내용 없음'}</p></div>
-        <div class="fb-section">
-          <h4>✅ 키워드 확인</h4>
-          <div class="keyword-check">${mission.keywords.map(kw=>{const hit=text.includes(kw.split('·')[0].replace(/[·\/]/g,'').substring(0,4));return`<span class="${hit?'kw-found':'kw-miss'}">${hit?'✓':'✗'} ${kw}</span>`;}).join('')}</div>
-        </div>
-        <div class="fb-section"><h4>📌 모범 답안</h4><p style="font-size:12px;color:#555;line-height:1.7">${escapeHtml(mission.answer)}</p></div>
-      </div>`;
+function buildInlineFeedbackHtml(phase, phaseResponses, participants) {
+  participants = participants || {};
+  const cards = DISPLAY_ROLES.flatMap(role => {
+    const mission = phase.missions[getBaseRole(role)];
+    if (!mission) return [];
+    const entries = getRoleEntries(phaseResponses, participants, role);
+    const multi = entries.length > 1 && !entries[0].isProxy;
+    return entries.map(e => {
+      const isMe = e.key === getRKey();
+      const found = mission.keywords.filter(kw => e.text.includes(kw.split('·')[0].replace(/[·\/]/g,'').substring(0,4)));
+      const score = mission.keywords.length > 0 ? Math.round(found.length / mission.keywords.length * 100) : 100;
+      const scoreClass = score >= 80 ? 'score-high' : score >= 50 ? 'score-mid' : 'score-low';
+      const nameTag = e.isProxy ? '(대리입력)' : multi ? `(${e.name})` : '';
+      return `
+        <div class="fb-card ${isMe?'my-fb-card':''}">
+          <div class="fb-card-header">
+            ${ROLE_ICONS[role]||''} ${role}
+            ${nameTag ? `<span style="font-size:11px;opacity:0.8;margin-left:4px">${nameTag}</span>` : ''}
+            ${isMe ? '<span style="font-size:11px;opacity:0.8;margin-left:4px;color:#aed6f1">(나)</span>' : ''}
+            <span class="score-badge ${scoreClass}" style="float:right">${score}점</span>
+          </div>
+          <div class="fb-section"><h4>📝 작성 내용</h4><p class="${!e.text?'empty':''}">${e.text?escapeHtml(e.text):'작성 내용 없음'}</p></div>
+          <div class="fb-section"><h4>✅ 키워드 확인</h4>
+            <div class="keyword-check">${mission.keywords.map(kw=>{const hit=e.text.includes(kw.split('·')[0].replace(/[·\/]/g,'').substring(0,4));return`<span class="${hit?'kw-found':'kw-miss'}">${hit?'✓':'✗'} ${kw}</span>`;}).join('')}</div>
+          </div>
+          <div class="fb-section"><h4>📌 모범 답안</h4><p style="font-size:12px;color:#555;line-height:1.7">${escapeHtml(mission.answer)}</p></div>
+        </div>`;
+    });
   }).join('');
   return `<div style="margin-top:24px;padding-top:20px;border-top:2px solid var(--border)">
     <h3 style="font-size:15px;font-weight:700;margin-bottom:14px">📊 피드백 — 키워드 체크</h3>
@@ -1540,27 +1674,33 @@ function renderPhaseFeedback(body, state) {
   const phaseResponses = (state.responses || {})[`phase${state.currentPhase}`] || {};
   const isLast = state.currentPhase === 3;
 
-  const cards = Object.entries(phase.missions).map(([role, mission]) => {
-    const text = phaseResponses[role] || '';
-    const found = mission.keywords.filter(kw => text.includes(kw.split('·')[0].replace(/[·\/]/g,'').substring(0,4)));
-    const score = mission.keywords.length > 0 ? Math.round(found.length / mission.keywords.length * 100) : 100;
-    const scoreClass = score >= 80 ? 'score-high' : score >= 50 ? 'score-mid' : 'score-low';
-    const isMe = role === myRole;
-    const isProxy = phaseResponses[`${role}_proxy`];
-    return `
-      <div class="fb-card ${isMe?'my-fb-card':''}">
-        <div class="fb-card-header">
-          ${ROLE_ICONS[role]||''} ${role}
-          ${isMe?'<span style="font-size:11px;opacity:0.8">(나)</span>':''}
-          ${isProxy?'<span style="font-size:11px;opacity:0.8;margin-left:4px">(대리입력)</span>':''}
-          <span class="score-badge ${scoreClass}" style="float:right">${score}점</span>
-        </div>
-        <div class="fb-section"><h4>📝 작성 내용</h4><p class="${!text?'empty':''}">${text?escapeHtml(text):'작성 내용 없음'}</p></div>
-        <div class="fb-section"><h4>✅ 키워드 확인</h4>
-          <div class="keyword-check">${mission.keywords.map(kw=>{const hit=text.includes(kw.split('·')[0].replace(/[·\/]/g,'').substring(0,4));return`<span class="${hit?'kw-found':'kw-miss'}">${hit?'✓':'✗'} ${kw}</span>`;}).join('')}</div>
-        </div>
-        <div class="fb-section"><h4>📌 모범 답안</h4><p style="font-size:12px;color:#555;line-height:1.7">${escapeHtml(mission.answer)}</p></div>
-      </div>`;
+  const participants = state.participants || {};
+  const cards = DISPLAY_ROLES.flatMap(role => {
+    const mission = phase.missions[getBaseRole(role)];
+    if (!mission) return [];
+    const entries = getRoleEntries(phaseResponses, participants, role);
+    const multi = entries.length > 1 && !entries[0].isProxy;
+    return entries.map(e => {
+      const isMe = e.key === getRKey();
+      const found = mission.keywords.filter(kw => e.text.includes(kw.split('·')[0].replace(/[·\/]/g,'').substring(0,4)));
+      const score = mission.keywords.length > 0 ? Math.round(found.length / mission.keywords.length * 100) : 100;
+      const scoreClass = score >= 80 ? 'score-high' : score >= 50 ? 'score-mid' : 'score-low';
+      const nameTag = e.isProxy ? '(대리입력)' : multi ? `(${e.name})` : '';
+      return `
+        <div class="fb-card ${isMe?'my-fb-card':''}">
+          <div class="fb-card-header">
+            ${ROLE_ICONS[role]||''} ${role}
+            ${nameTag?`<span style="font-size:11px;opacity:0.8;margin-left:4px">${nameTag}</span>`:''}
+            ${isMe?'<span style="font-size:11px;opacity:0.8;margin-left:4px;color:#aed6f1">(나)</span>':''}
+            <span class="score-badge ${scoreClass}" style="float:right">${score}점</span>
+          </div>
+          <div class="fb-section"><h4>📝 작성 내용</h4><p class="${!e.text?'empty':''}">${e.text?escapeHtml(e.text):'작성 내용 없음'}</p></div>
+          <div class="fb-section"><h4>✅ 키워드 확인</h4>
+            <div class="keyword-check">${mission.keywords.map(kw=>{const hit=e.text.includes(kw.split('·')[0].replace(/[·\/]/g,'').substring(0,4));return`<span class="${hit?'kw-found':'kw-miss'}">${hit?'✓':'✗'} ${kw}</span>`;}).join('')}</div>
+          </div>
+          <div class="fb-section"><h4>📌 모범 답안</h4><p style="font-size:12px;color:#555;line-height:1.7">${escapeHtml(mission.answer)}</p></div>
+        </div>`;
+    });
   }).join('');
 
   const modControls = myRole === '모더레이터' ? `
@@ -1582,6 +1722,8 @@ function renderPhaseFeedback(body, state) {
         ${modControls}
       </div>
     </div>
+    ${renderRoleAnnouncementBanner(state)}
+    ${myRole === '모더레이터' ? renderRoleReassignPanel(state) : ''}
     <div class="fb-grid">${cards}</div>
   </div>`;
 }
@@ -1589,36 +1731,45 @@ function renderPhaseFeedback(body, state) {
 function renderParticipantsList(state, phaseNum) {
   const participants = state.participants || {};
   const phaseResponses = (state.responses || {})[`phase${phaseNum}`] || {};
-  const roles = ['모더레이터','담임교사','보건교사','행정실','교장/교감'];
-  return roles.map(role => {
-    const p = participants[role];
-    if (!p) return `<div class="participant-item"><div class="p-dot"></div><div><div>${ROLE_ICONS[role]||''} ${role}</div><div class="p-role">미접속</div></div></div>`;
+  return PARTICIPANT_ROLES.map(role => {
+    const rolePeople = Object.values(participants).filter(p => p.role === role);
     const submitted = phaseResponses[`${role}_submitted`];
     const hasText = phaseResponses[role] && phaseResponses[role].length > 0;
     const isProxy = phaseResponses[`${role}_proxy`];
-    return `<div class="participant-item">
-      <div class="p-dot ${submitted?'submitted':'online'}"></div>
-      <div><div>${ROLE_ICONS[role]||''} ${role}</div>
-      <div class="p-role">${p.name} · ${submitted?(isProxy?'🔄 대리제출':'✅ 제출완료'):hasText?'✏️ 작성중':'대기중'}</div></div>
-    </div>`;
+    if (!rolePeople.length) {
+      return `<div class="participant-item"><div class="p-dot"></div><div><div>${ROLE_ICONS[role]||''} ${role}</div><div class="p-role">미접속</div></div></div>`;
+    }
+    return rolePeople.map(p => {
+      const pk = `${role}:${p.name}`;
+      const pSubmitted = phaseResponses[`${pk}_submitted`] || false;
+      const pText = phaseResponses[pk] && phaseResponses[pk].length > 0;
+      return `<div class="participant-item">
+        <div class="p-dot ${pSubmitted?'submitted':'online'}"></div>
+        <div><div>${ROLE_ICONS[role]||''} ${role}</div>
+        <div class="p-role">${p.name} · ${pSubmitted?'✅ 제출완료':pText?'✏️ 작성중':'대기중'}</div></div>
+      </div>`;
+    }).join('');
   }).join('');
 }
 
-function renderAllRoleCards(phase, phaseResponses, excludeRole) {
-  const roles = ['담임교사','보건교사','행정실','교장/교감'];
-  return roles.filter(r => r !== excludeRole).map(role => {
-    const text = phaseResponses[role] || '';
-    const submitted = phaseResponses[`${role}_submitted`] || false;
-    const isProxy = phaseResponses[`${role}_proxy`];
-    const statusClass = submitted ? 'status-submitted' : text ? 'status-typing' : 'status-waiting';
-    const statusText = submitted ? (isProxy ? '🔄 대리입력' : '✅ 제출완료') : text ? '✏️ 작성중...' : '대기중';
-    return `<div class="response-card">
-      <div class="response-card-header">
-        <span>${ROLE_ICONS[role]||''} ${role}</span>
-        <span class="response-status ${statusClass}">${statusText}</span>
-      </div>
-      <div class="response-text ${!text?'empty':''}">${text?escapeHtml(text):'아직 작성 내용이 없습니다.'}</div>
-    </div>`;
+function renderAllRoleCards(phase, phaseResponses, excludeKey, participants) {
+  participants = participants || {};
+  return DISPLAY_ROLES.flatMap(role => {
+    const entries = getRoleEntries(phaseResponses, participants, role);
+    return entries.map(e => {
+      if (e.key === excludeKey) return '';
+      const multi = entries.length > 1 && !e.isProxy;
+      const label = multi ? `${ROLE_ICONS[role]||''} ${role} <span style="font-size:11px;font-weight:400;opacity:0.75">(${e.name})</span>` : `${ROLE_ICONS[role]||''} ${role}`;
+      const statusClass = e.submitted ? 'status-submitted' : e.text ? 'status-typing' : 'status-waiting';
+      const statusText = e.submitted ? (e.isProxy ? '🔄 대리입력' : '✅ 제출완료') : e.text ? '✏️ 작성중...' : '대기중';
+      return `<div class="response-card">
+        <div class="response-card-header">
+          <span>${label}</span>
+          <span class="response-status ${statusClass}">${statusText}</span>
+        </div>
+        <div class="response-text ${!e.text?'empty':''}">${e.text?escapeHtml(e.text):'아직 작성 내용이 없습니다.'}</div>
+      </div>`;
+    }).join('');
   }).join('');
 }
 
@@ -1631,16 +1782,33 @@ function renderFeedbackTransition() {
 // ═══════════════════════════════════════════════════════
 //  ACTIONS
 // ═══════════════════════════════════════════════════════
-function startPhase(phaseNum) {
+function startPhase(phaseNum, durationSeconds) {
   if (myRole !== '모더레이터') return;
   const state = getState();
+  // 역할 재배정 공지가 있으면 participants에 반영 후 공지 초기화
+  if (state.roleAnnouncement) {
+    Object.entries(state.roleAnnouncement.assignments).forEach(([name, newRole]) => {
+      if (state.participants[name]) state.participants[name].role = newRole;
+    });
+    state.roleAnnouncement = null;
+  }
   state.currentPhase = phaseNum; state.phaseStartTime = Date.now();
   state.timerRunning = true; state.showingFeedback = false;
   saveState(state); broadcast('PHASE_CHANGE', { phase: phaseNum }); renderExercise();
 }
+function changeDuration(delta) {
+  const inp = document.getElementById('duration-input');
+  if (!inp) return;
+  const cur = parseInt(inp.value) || 5;
+  inp.value = Math.max(1, Math.min(60, cur + delta));
+}
 function startTimer() {
   if (myRole !== '모더레이터') return;
-  const state = getState(); state.phaseStartTime = Date.now(); state.timerRunning = true;
+  const inp = document.getElementById('duration-input');
+  const minutes = inp ? Math.max(1, Math.min(60, parseInt(inp.value) || 5)) : 5;
+  const state = getState();
+  state.phaseDuration = minutes * 60;
+  state.phaseStartTime = Date.now(); state.timerRunning = true;
   saveState(state); broadcast('STATE_CHANGED', {}); renderExercise();
 }
 function nextPhase() {
@@ -1685,7 +1853,7 @@ function saveMyDraft(text) {
   if (!state.responses) state.responses = {};
   const key = `phase${state.currentPhase}`;
   if (!state.responses[key]) state.responses[key] = {};
-  state.responses[key][myRole] = text;
+  state.responses[key][getRKey()] = text;
   saveState(state); broadcast('RESPONSE_UPDATE', {});
 }
 function submitResponse() {
@@ -1695,8 +1863,18 @@ function submitResponse() {
   if (!state.responses) state.responses = {};
   const key = `phase${state.currentPhase}`;
   if (!state.responses[key]) state.responses[key] = {};
-  state.responses[key][myRole] = text;
-  state.responses[key][`${myRole}_submitted`] = true;
+  const rk = getRKey();
+  state.responses[key][rk] = text;
+  state.responses[key][`${rk}_submitted`] = true;
+  saveState(state); broadcast('RESPONSE_UPDATE', {}); renderExercise();
+}
+function editResponse() {
+  const state = getState();
+  const key = `phase${state.currentPhase}`;
+  const rk = getRKey();
+  if (state.responses && state.responses[key]) {
+    state.responses[key][`${rk}_submitted`] = false;
+  }
   saveState(state); broadcast('RESPONSE_UPDATE', {}); renderExercise();
 }
 
@@ -1722,27 +1900,35 @@ function renderFeedback() {
         <small style="color:var(--muted);font-weight:400;font-size:13px">${phase.date}</small>
       </div>
       <div class="fb-grid">
-        ${Object.entries(phase.missions).map(([role, mission]) => {
-          const text = phaseResponses[role] || '';
-          const submitted = phaseResponses[`${role}_submitted`] || false;
-          const isProxy = phaseResponses[`${role}_proxy`] || false;
-          const found = mission.keywords.filter(kw => text.includes(kw.split('·')[0].replace(/[·\/]/g,'').substring(0,4)));
-          const score = mission.keywords.length > 0 ? Math.round(found.length / mission.keywords.length * 100) : 100;
-          const scoreClass = score >= 80 ? 'score-high' : score >= 50 ? 'score-mid' : 'score-low';
-          return `<div class="fb-card">
-            <div class="fb-card-header">
-              ${ROLE_ICONS[role]||''} ${role}
-              ${isProxy?'<span style="font-size:11px;opacity:0.8;margin-left:4px">(대리입력)</span>':''}
-              <span class="score-badge ${scoreClass}" style="float:right">${score}점</span>
-            </div>
-            <div class="fb-section"><h4>📝 작성한 내용 ${submitted?(isProxy?'(대리입력)':'(제출완료)'):'(미제출)'}</h4>
-              <p class="${!text?'empty':''}">${text?escapeHtml(text):'작성 내용 없음'}</p>
-            </div>
-            <div class="fb-section"><h4>✅ 정답 키워드 확인</h4>
-              <div class="keyword-check">${mission.keywords.map(kw=>{const hit=text.includes(kw.split('·')[0].replace(/[·\/]/g,'').substring(0,4));return`<span class="${hit?'kw-found':'kw-miss'}">${hit?'✓':'✗'} ${kw}</span>`;}).join('')}</div>
-            </div>
-            <div class="fb-section"><h4>📌 모범 답안</h4><p style="font-size:12px;color:#555">${escapeHtml(mission.answer)}</p></div>
-          </div>`;
+        ${DISPLAY_ROLES.flatMap(role => {
+          const mission = phase.missions[getBaseRole(role)];
+          if (!mission) return [];
+          const participants = state.participants || {};
+          const entries = getRoleEntries(phaseResponses, participants, role);
+          const multi = entries.length > 1 && !entries[0].isProxy;
+          return entries.map(e => {
+            const text = e.text || '';
+            const submitted = e.submitted || false;
+            const isProxy = e.isProxy || false;
+            const nameTag = multi ? ` <span style="font-size:12px;font-weight:400;opacity:0.8">(${e.name})</span>` : '';
+            const found = mission.keywords.filter(kw => text.includes(kw.split('·')[0].replace(/[·\/]/g,'').substring(0,4)));
+            const score = mission.keywords.length > 0 ? Math.round(found.length / mission.keywords.length * 100) : 100;
+            const scoreClass = score >= 80 ? 'score-high' : score >= 50 ? 'score-mid' : 'score-low';
+            return `<div class="fb-card">
+              <div class="fb-card-header">
+                ${ROLE_ICONS[role]||''} ${role}${nameTag}
+                ${isProxy?'<span style="font-size:11px;opacity:0.8;margin-left:4px">(대리입력)</span>':''}
+                <span class="score-badge ${scoreClass}" style="float:right">${score}점</span>
+              </div>
+              <div class="fb-section"><h4>📝 작성한 내용 ${submitted?(isProxy?'(대리입력)':'(제출완료)'):'(미제출)'}</h4>
+                <p class="${!text?'empty':''}">${text?escapeHtml(text):'작성 내용 없음'}</p>
+              </div>
+              <div class="fb-section"><h4>✅ 정답 키워드 확인</h4>
+                <div class="keyword-check">${mission.keywords.map(kw=>{const hit=text.includes(kw.split('·')[0].replace(/[·\/]/g,'').substring(0,4));return`<span class="${hit?'kw-found':'kw-miss'}">${hit?'✓':'✗'} ${kw}</span>`;}).join('')}</div>
+              </div>
+              <div class="fb-section"><h4>📌 모범 답안</h4><p style="font-size:12px;color:#555">${escapeHtml(mission.answer)}</p></div>
+            </div>`;
+          });
         }).join('')}
       </div>
     </div>`;
