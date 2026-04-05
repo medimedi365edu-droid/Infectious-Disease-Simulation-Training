@@ -1149,6 +1149,7 @@ async function createRoom(scenarioId, groupNum) {
   state.groupNum = groupNum;
   state.roomCode = roomCode;
   state.createdAt = Date.now();
+  _cachedState = normalizeState(state); // 즉시 캐시
   await dbRef.set(state);
   // URL에 roomCode 반영
   const url = new URL(location.href);
@@ -1176,6 +1177,8 @@ async function joinRoom(code) {
     ACTIVE_SCENARIO = sc;
     ACTIVE_PHASES = sc.phases;
   }
+  // 즉시 캐시에 저장 (listenRoom 첫 이벤트 전에도 getState()가 정상 동작하도록)
+  _cachedState = normalizeState(data);
   listenRoom();
   return true;
 }
@@ -1184,10 +1187,31 @@ function listenRoom() {
   if (!dbRef) return;
   dbRef.on('value', (snap) => {
     if (!snap.exists()) return;
-    _cachedState = snap.val();
+    _cachedState = normalizeState(snap.val());
     if (isTyping()) { pendingRender = true; return; }
     renderExercise();
   });
+}
+
+// Firebase에서 온 데이터에 누락 필드 보완
+function normalizeState(data) {
+  if (!data) return defaultState();
+  return {
+    currentPhase: data.currentPhase ?? 0,
+    phaseStartTime: data.phaseStartTime ?? null,
+    timerRunning: data.timerRunning ?? false,
+    timerPaused: data.timerPaused ?? false,
+    timerPausedRemaining: data.timerPausedRemaining ?? null,
+    phaseDuration: data.phaseDuration ?? null,
+    showingFeedback: data.showingFeedback ?? false,
+    participants: data.participants ?? {},
+    responses: data.responses ?? {},
+    roleAnnouncement: data.roleAnnouncement ?? null,
+    scenarioId: data.scenarioId ?? '',
+    groupNum: data.groupNum ?? '',
+    roomCode: data.roomCode ?? '',
+    createdAt: data.createdAt ?? null,
+  };
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1374,6 +1398,8 @@ startTimerLoop();
 //  RENDER
 // ═══════════════════════════════════════════════════════
 function renderExercise() {
+  // ACTIVE_SCENARIO가 아직 로드 안 됐으면 대기
+  if (!ACTIVE_SCENARIO) return;
   const state = getState();
   // 역할 재배정 공지가 적용된 경우 myRole 자동 동기화
   if (myName && state.participants && state.participants[myName]) {
