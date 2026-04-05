@@ -1002,7 +1002,6 @@ let CHANNEL_NAME = '';
 let myName = '';
 let myRole = '';
 let myGroup = '';
-let channel;
 let timerInterval = null;
 let pendingRender = false;
 
@@ -1185,31 +1184,58 @@ async function joinRoom(code) {
 
 function listenRoom() {
   if (!dbRef) return;
+  // 중복 리스너 방지
+  dbRef.off('value');
   dbRef.on('value', (snap) => {
-    if (!snap.exists()) return;
-    _cachedState = normalizeState(snap.val());
-    if (isTyping()) { pendingRender = true; return; }
-    renderExercise();
+    try {
+      if (!snap.exists()) return;
+      const raw = snap.val();
+      _cachedState = normalizeState(raw);
+      if (isTyping()) { pendingRender = true; return; }
+      renderExercise();
+    } catch(err) {
+      console.error('listenRoom error:', err);
+    }
   });
 }
 
 // Firebase에서 온 데이터에 누락 필드 보완
+// ⚠️ Firebase는 빈 {}를 null로 저장하므로 반드시 null → {} 변환 필요
 function normalizeState(data) {
-  if (!data) return defaultState();
+  if (!data || typeof data !== 'object') return defaultState();
+  // participants 안의 각 항목도 null 체크
+  const rawPart = data.participants;
+  let participants = {};
+  if (rawPart && typeof rawPart === 'object') {
+    Object.entries(rawPart).forEach(([k, v]) => {
+      if (v && typeof v === 'object' && v.role) participants[k] = v;
+    });
+  }
+  // responses 안의 각 phase도 null 체크
+  const rawResp = data.responses;
+  let responses = {};
+  if (rawResp && typeof rawResp === 'object') {
+    Object.entries(rawResp).forEach(([k, v]) => {
+      responses[k] = (v && typeof v === 'object') ? v : {};
+    });
+  }
+  // roleAnnouncement null 체크
+  const ra = data.roleAnnouncement;
+  const roleAnnouncement = (ra && ra.assignments && typeof ra.assignments === 'object') ? ra : null;
   return {
-    currentPhase: data.currentPhase ?? 0,
+    currentPhase: (typeof data.currentPhase === 'number') ? data.currentPhase : 0,
     phaseStartTime: data.phaseStartTime ?? null,
-    timerRunning: data.timerRunning ?? false,
-    timerPaused: data.timerPaused ?? false,
+    timerRunning: data.timerRunning === true,
+    timerPaused: data.timerPaused === true,
     timerPausedRemaining: data.timerPausedRemaining ?? null,
     phaseDuration: data.phaseDuration ?? null,
-    showingFeedback: data.showingFeedback ?? false,
-    participants: data.participants ?? {},
-    responses: data.responses ?? {},
-    roleAnnouncement: data.roleAnnouncement ?? null,
-    scenarioId: data.scenarioId ?? '',
-    groupNum: data.groupNum ?? '',
-    roomCode: data.roomCode ?? '',
+    showingFeedback: data.showingFeedback === true,
+    participants,
+    responses,
+    roleAnnouncement,
+    scenarioId: data.scenarioId || '',
+    groupNum: data.groupNum || '',
+    roomCode: data.roomCode || '',
     createdAt: data.createdAt ?? null,
   };
 }
@@ -1230,8 +1256,17 @@ function getState() {
 }
 
 function saveState(state) {
-  _cachedState = JSON.parse(JSON.stringify(state));
-  if (dbRef) dbRef.set(state);
+  // participants/responses가 빈 객체면 Firebase가 null로 저장하므로
+  // sentinel 값을 넣어서 null 저장 방지
+  const toSave = JSON.parse(JSON.stringify(state));
+  if (!toSave.participants || Object.keys(toSave.participants).length === 0) {
+    toSave.participants = { _placeholder: true };
+  }
+  if (!toSave.responses || Object.keys(toSave.responses).length === 0) {
+    toSave.responses = { _placeholder: true };
+  }
+  _cachedState = normalizeState(toSave);
+  if (dbRef) dbRef.set(toSave);
 }
 
 function broadcast(type, data) {
@@ -1398,8 +1433,8 @@ startTimerLoop();
 //  RENDER
 // ═══════════════════════════════════════════════════════
 function renderExercise() {
-  // ACTIVE_SCENARIO가 아직 로드 안 됐으면 대기
-  if (!ACTIVE_SCENARIO) return;
+  // ACTIVE_SCENARIO/ACTIVE_PHASES가 아직 로드 안 됐으면 대기
+  if (!ACTIVE_SCENARIO || !ACTIVE_PHASES || ACTIVE_PHASES.length === 0) return;
   const state = getState();
   // 역할 재배정 공지가 적용된 경우 myRole 자동 동기화
   if (myName && state.participants && state.participants[myName]) {
@@ -1977,9 +2012,9 @@ function startPhase(phaseNum, durationSeconds) {
   if (myRole !== '모더레이터') return;
   const state = getState();
   // 역할 재배정 공지가 있으면 participants에 반영 후 공지 초기화
-  if (state.roleAnnouncement) {
+  if (state.roleAnnouncement && state.roleAnnouncement.assignments) {
     Object.entries(state.roleAnnouncement.assignments).forEach(([name, newRole]) => {
-      if (state.participants[name]) state.participants[name].role = newRole;
+      if (state.participants && state.participants[name]) state.participants[name].role = newRole;
     });
     state.roleAnnouncement = null;
   }
