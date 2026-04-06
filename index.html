@@ -367,6 +367,36 @@
   .score-high { background: #d5f5e3; color: #1e8449; }
   .score-mid { background: #fef9e7; color: #b7950b; }
   .score-low { background: #fadbd8; color: #922b21; }
+  .score-pending { background: #eaf0fb; color: #1a3a5c; }
+  .checklist-row {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 8px 10px; border-radius: 7px; margin-bottom: 4px;
+    background: #f7f9fc; border: 1.5px solid transparent; cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .checklist-row:hover { background: #eaf0fb; border-color: #b8cce8; }
+  .checklist-row.checked { background: #eafaf1; border-color: #82e0aa; }
+  .checklist-row.checked .kw-label { color: #1e8449; font-weight: 700; }
+  .checklist-row.mod-readonly { cursor: default; }
+  .checklist-row.mod-readonly:hover { background: #f7f9fc; border-color: transparent; }
+  .checklist-row.checked.mod-readonly { background: #eafaf1; border-color: #82e0aa; }
+  .checklist-box {
+    width: 18px; height: 18px; min-width: 18px; border-radius: 4px;
+    border: 2px solid #b8cce8; background: white; display: flex; align-items: center;
+    justify-content: center; font-size: 12px; font-weight: 700; color: #1e8449;
+    transition: all 0.15s; margin-top: 1px;
+  }
+  .checklist-row.checked .checklist-box { background: #27ae60; border-color: #27ae60; color: white; }
+  .kw-label { font-size: 12px; font-weight: 600; color: #444; line-height: 1.5; }
+  .kw-sublabel { font-size: 11px; color: var(--muted); margin-top: 1px; }
+  .score-bar-wrap { height: 6px; background: #e8edf3; border-radius: 3px; margin-top: 6px; overflow: hidden; }
+  .score-bar { height: 6px; border-radius: 3px; transition: width 0.4s, background 0.3s; }
+  .manual-score-total {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; background: #f0f4fa; border-radius: 8px; margin-top: 10px;
+  }
+  .manual-score-num { font-size: 22px; font-weight: 800; color: var(--primary); }
+  .manual-score-label { font-size: 12px; color: var(--muted); margin-top: 2px; }
   .btn-restart {
     padding: 12px 32px; background: var(--primary); color: white; border: none;
     border-radius: 10px; font-size: 16px; font-weight: 700; cursor: pointer; font-family: inherit;
@@ -1242,6 +1272,7 @@ function normalizeState(data) {
     showingFeedback: data.showingFeedback === true,
     participants,
     responses,
+    scores: (data.scores && typeof data.scores === 'object') ? data.scores : {},
     roleAnnouncement,
     scenarioId: data.scenarioId || '',
     groupNum: data.groupNum || '',
@@ -1257,7 +1288,7 @@ let _cachedState = null;
 
 function defaultState() {
   return { currentPhase: 0, phaseStartTime: null, timerRunning: false, timerPaused: false,
-    timerPausedRemaining: null, showingFeedback: false, participants: {}, responses: {}, roleAnnouncement: null };
+    timerPausedRemaining: null, showingFeedback: false, participants: {}, responses: {}, scores: {}, roleAnnouncement: null };
 }
 
 function getState() {
@@ -1713,6 +1744,7 @@ function renderPhase(body, state) {
           </div>
         </div>
       </div>`;
+  } else if (!myMission) {
     workHtml = `
       <div class="work-area">
         <div class="no-mission-notice">
@@ -1907,81 +1939,158 @@ function editProxy(role) {
   renderExercise();
 }
 
+// ═══════════════════════════════════════════════════════
+//  MANUAL SCORING (모더레이터 직접 채점)
+// ═══════════════════════════════════════════════════════
+function saveManualScore(phaseNum, roleKey, checks) {
+  if (myRole !== '모더레이터') return;
+  const state = getState();
+  if (!state.scores) state.scores = {};
+  const pk = `phase${phaseNum}`;
+  if (!state.scores[pk]) state.scores[pk] = {};
+  state.scores[pk][roleKey] = checks; // {kw0: true, kw1: false, ...}
+  saveState(state); broadcast('STATE_CHANGED', {});
+  // 헤더 배지 즉시 갱신
+  _refreshScoreBadge(phaseNum, roleKey, checks);
+}
+
+function _refreshScoreBadge(phaseNum, roleKey, checks) {
+  const badgeEl = document.getElementById(`score-badge-${phaseNum}-${roleKey}`);
+  const barEl   = document.getElementById(`score-bar-${phaseNum}-${roleKey}`);
+  const numEl   = document.getElementById(`score-num-${phaseNum}-${roleKey}`);
+  const total = Object.keys(checks).length;
+  const hit   = Object.values(checks).filter(Boolean).length;
+  const score = total > 0 ? Math.round(hit / total * 100) : 0;
+  const cls   = score >= 80 ? 'score-high' : score >= 50 ? 'score-mid' : 'score-low';
+  const bar   = score >= 80 ? '#27ae60' : score >= 50 ? '#e6b800' : '#c0392b';
+  if (badgeEl) { badgeEl.className = `score-badge ${cls}`; badgeEl.textContent = `${score}점`; }
+  if (barEl)   { barEl.style.width = `${score}%`; barEl.style.background = bar; }
+  if (numEl)   { numEl.textContent = `${score}점`; numEl.style.color = score >= 80 ? '#1e8449' : score >= 50 ? '#b7950b' : '#c0392b'; }
+}
+
+function toggleCheck(phaseNum, roleKey, kwIdx, totalKw) {
+  if (myRole !== '모더레이터') return;
+  const state = getState();
+  const pk = `phase${phaseNum}`;
+  const cur = (state.scores && state.scores[pk] && state.scores[pk][roleKey]) || {};
+  const next = Object.assign({}, cur);
+  next[`kw${kwIdx}`] = !next[`kw${kwIdx}`];
+  // 체크박스 UI 즉시 토글 (re-render 없이)
+  const row = document.getElementById(`ckrow-${phaseNum}-${roleKey}-${kwIdx}`);
+  if (row) {
+    row.classList.toggle('checked', next[`kw${kwIdx}`]);
+    const box = row.querySelector('.checklist-box');
+    if (box) box.textContent = next[`kw${kwIdx}`] ? '✓' : '';
+  }
+  saveManualScore(phaseNum, roleKey, next);
+}
+
+function buildManualScoreCard(phase, phaseNum, entry, savedChecks, isModerator) {
+  const mission = phase.missions[getBaseRole(entry.role)];
+  if (!mission) return '';
+  const keywords = mission.keywords || [];
+  const checks   = savedChecks || {};
+  const total    = keywords.length;
+  const hit      = keywords.filter((_, i) => checks[`kw${i}`]).length;
+  const score    = total > 0 ? Math.round(hit / total * 100) : (savedChecks ? 0 : null);
+  const hasScore = savedChecks !== null && savedChecks !== undefined;
+  const scoreClass = !hasScore ? 'score-pending' : score >= 80 ? 'score-high' : score >= 50 ? 'score-mid' : 'score-low';
+  const badgeText  = !hasScore ? '미채점' : `${score}점`;
+  const barColor   = score >= 80 ? '#27ae60' : score >= 50 ? '#e6b800' : '#c0392b';
+  const rk = entry.key;
+
+  const checklistRows = keywords.map((kw, i) => {
+    const checked = !!checks[`kw${i}`];
+    const autoHit = kwMatch(entry.text, kw);
+    const hint    = autoHit ? ' · 자동감지됨' : '';
+    if (isModerator) {
+      return `<div id="ckrow-${phaseNum}-${rk}-${i}" class="checklist-row${checked?' checked':''}" onclick="toggleCheck(${phaseNum},'${rk}',${i},${total})">
+        <div class="checklist-box">${checked?'✓':''}</div>
+        <div><div class="kw-label">${escapeHtml(kw)}</div><div class="kw-sublabel">${autoHit?'🔍 텍스트에서 감지됨':'📝 내용 확인 후 체크'}</div></div>
+      </div>`;
+    } else {
+      return `<div class="checklist-row mod-readonly${checked?' checked':''}">
+        <div class="checklist-box">${checked?'✓':''}</div>
+        <div><div class="kw-label">${escapeHtml(kw)}</div><div class="kw-sublabel">${checked?'✅ 확인됨':'—'}</div></div>
+      </div>`;
+    }
+  }).join('');
+
+  const nameTag = entry.isProxy ? ' (대리입력)' : '';
+  const meTag   = entry.key === getRKey() ? '<span style="font-size:11px;opacity:0.8;margin-left:4px;color:#aed6f1">(나)</span>' : '';
+  const isMe    = entry.key === getRKey();
+
+  return `<div class="fb-card${isMe?' my-fb-card':''}">
+    <div class="fb-card-header" style="display:flex;align-items:center;justify-content:space-between">
+      <span>${ROLE_ICONS[entry.role]||''} ${entry.role}${nameTag?`<span style="font-size:11px;opacity:0.8;margin-left:4px">${nameTag}</span>`:''}${meTag}</span>
+      <span id="score-badge-${phaseNum}-${rk}" class="score-badge ${scoreClass}">${badgeText}</span>
+    </div>
+    <div class="fb-section"><h4>📝 작성 내용</h4>
+      <p class="${!entry.text?'empty':''}">${entry.text?escapeHtml(entry.text):'작성 내용 없음'}</p>
+    </div>
+    <div class="fb-section">
+      <h4>${isModerator?'🖊️ 채점 체크리스트 (클릭하여 체크)':'📋 채점 결과'}</h4>
+      ${checklistRows || '<p style="color:var(--muted);font-size:12px">키워드 없음</p>'}
+      ${hasScore ? `
+      <div class="manual-score-total">
+        <div><div class="manual-score-label">${isModerator?'현재 점수':'모더레이터 채점'}</div></div>
+        <div id="score-num-${phaseNum}-${rk}" class="manual-score-num" style="color:${!hasScore?'var(--primary)':score>=80?'#1e8449':score>=50?'#b7950b':'#c0392b'}">${badgeText}</div>
+      </div>
+      <div class="score-bar-wrap"><div id="score-bar-${phaseNum}-${rk}" class="score-bar" style="width:${score}%;background:${barColor}"></div></div>
+      ` : isModerator ? `<p style="font-size:11px;color:var(--muted);margin-top:8px">💡 키워드를 체크하면 점수가 자동 계산됩니다</p>` : `<p style="font-size:12px;color:var(--muted);margin-top:8px;font-style:italic">모더레이터가 아직 채점 중입니다</p>`}
+    </div>
+    <div class="fb-section"><h4>📌 모범 답안</h4><p style="font-size:12px;color:#555;line-height:1.7">${escapeHtml(mission.answer)}</p></div>
+  </div>`;
+}
+
 function buildInlineFeedbackHtml(phase, phaseResponses, participants) {
   participants = participants || {};
+  const state = getState();
+  const phaseNum = state.currentPhase;
+  const phaseScores = (state.scores && state.scores[`phase${phaseNum}`]) || {};
+  const isModerator = myRole === '모더레이터';
+
   const cards = DISPLAY_ROLES.flatMap(role => {
     const mission = phase.missions[getBaseRole(role)];
     if (!mission) return [];
     const entries = getRoleEntries(phaseResponses, participants, role);
-    const multi = entries.length > 1 && !entries[0].isProxy;
     return entries.map(e => {
-      const isMe = e.key === getRKey();
-      const found = mission.keywords.filter(kw => kwMatch(e.text, kw));
-      const score = mission.keywords.length > 0 ? Math.round(found.length / mission.keywords.length * 100) : 100;
-      const scoreClass = score >= 80 ? 'score-high' : score >= 50 ? 'score-mid' : 'score-low';
-      const nameTag = e.isProxy ? '(대리입력)' : multi ? `(${e.name})` : '';
-      return `
-        <div class="fb-card ${isMe?'my-fb-card':''}">
-          <div class="fb-card-header">
-            ${ROLE_ICONS[role]||''} ${role}
-            ${nameTag ? `<span style="font-size:11px;opacity:0.8;margin-left:4px">${nameTag}</span>` : ''}
-            ${isMe ? '<span style="font-size:11px;opacity:0.8;margin-left:4px;color:#aed6f1">(나)</span>' : ''}
-            <span class="score-badge ${scoreClass}" style="float:right">${score}점</span>
-          </div>
-          <div class="fb-section"><h4>📝 작성 내용</h4><p class="${!e.text?'empty':''}">${e.text?escapeHtml(e.text):'작성 내용 없음'}</p></div>
-          <div class="fb-section"><h4>✅ 키워드 확인</h4>
-            <div class="keyword-check">${mission.keywords.map(kw=>{const hit=kwMatch(e.text, kw);return`<span class="${hit?'kw-found':'kw-miss'}">${hit?'✓':'✗'} ${kw}</span>`;}).join('')}</div>
-          </div>
-          <div class="fb-section"><h4>📌 모범 답안</h4><p style="font-size:12px;color:#555;line-height:1.7">${escapeHtml(mission.answer)}</p></div>
-        </div>`;
+      const savedChecks = phaseScores[e.key] ?? null;
+      return buildManualScoreCard(phase, phaseNum, {...e, role}, savedChecks, isModerator);
     });
   }).join('');
+
   return `<div style="margin-top:24px;padding-top:20px;border-top:2px solid var(--border)">
-    <h3 style="font-size:15px;font-weight:700;margin-bottom:14px">📊 피드백 — 키워드 체크</h3>
+    <h3 style="font-size:15px;font-weight:700;margin-bottom:14px">📊 피드백 — ${isModerator?'모더레이터 채점':'채점 결과'}</h3>
     <div class="fb-grid">${cards}</div>
   </div>`;
 }
 
 function renderPhaseFeedback(body, state) {
   const phase = ACTIVE_PHASES[state.currentPhase - 1];
-  const phaseResponses = (state.responses || {})[`phase${state.currentPhase}`] || {};
-  const isLast = state.currentPhase === 3;
-
+  const phaseNum = state.currentPhase;
+  const phaseResponses = (state.responses || {})[`phase${phaseNum}`] || {};
+  const phaseScores = (state.scores && state.scores[`phase${phaseNum}`]) || {};
+  const isLast = phaseNum === 3;
+  const isModerator = myRole === '모더레이터';
   const participants = state.participants || {};
+
   const cards = DISPLAY_ROLES.flatMap(role => {
     const mission = phase.missions[getBaseRole(role)];
     if (!mission) return [];
     const entries = getRoleEntries(phaseResponses, participants, role);
-    const multi = entries.length > 1 && !entries[0].isProxy;
     return entries.map(e => {
-      const isMe = e.key === getRKey();
-      const found = mission.keywords.filter(kw => kwMatch(e.text, kw));
-      const score = mission.keywords.length > 0 ? Math.round(found.length / mission.keywords.length * 100) : 100;
-      const scoreClass = score >= 80 ? 'score-high' : score >= 50 ? 'score-mid' : 'score-low';
-      const nameTag = e.isProxy ? '(대리입력)' : multi ? `(${e.name})` : '';
-      return `
-        <div class="fb-card ${isMe?'my-fb-card':''}">
-          <div class="fb-card-header">
-            ${ROLE_ICONS[role]||''} ${role}
-            ${nameTag?`<span style="font-size:11px;opacity:0.8;margin-left:4px">${nameTag}</span>`:''}
-            ${isMe?'<span style="font-size:11px;opacity:0.8;margin-left:4px;color:#aed6f1">(나)</span>':''}
-            <span class="score-badge ${scoreClass}" style="float:right">${score}점</span>
-          </div>
-          <div class="fb-section"><h4>📝 작성 내용</h4><p class="${!e.text?'empty':''}">${e.text?escapeHtml(e.text):'작성 내용 없음'}</p></div>
-          <div class="fb-section"><h4>✅ 키워드 확인</h4>
-            <div class="keyword-check">${mission.keywords.map(kw=>{const hit=kwMatch(e.text, kw);return`<span class="${hit?'kw-found':'kw-miss'}">${hit?'✓':'✗'} ${kw}</span>`;}).join('')}</div>
-          </div>
-          <div class="fb-section"><h4>📌 모범 답안</h4><p style="font-size:12px;color:#555;line-height:1.7">${escapeHtml(mission.answer)}</p></div>
-        </div>`;
+      const savedChecks = phaseScores[e.key] ?? null;
+      return buildManualScoreCard(phase, phaseNum, {...e, role}, savedChecks, isModerator);
     });
   }).join('');
 
-  const nextPhaseDur = !isLast && ACTIVE_PHASES[state.currentPhase] ? Math.round(ACTIVE_PHASES[state.currentPhase].duration / 60) : 5;
+  const nextPhaseDur = !isLast && ACTIVE_PHASES[phaseNum] ? Math.round(ACTIVE_PHASES[phaseNum].duration / 60) : 5;
   const modControls = myRole === '모더레이터' ? `
     <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px;min-width:220px">
       ${!isLast ? `
       <div style="background:#f7f9fc;border:1.5px solid var(--border);border-radius:10px;padding:12px 14px">
-        <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px">⏱ ${state.currentPhase+1}단계 시간 설정</div>
+        <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px">⏱ ${phaseNum+1}단계 시간 설정</div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
           <button onclick="changeDuration(-1)" style="width:30px;height:30px;border:2px solid var(--border);border-radius:7px;background:white;font-size:16px;font-weight:700;cursor:pointer;color:var(--primary);display:flex;align-items:center;justify-content:center">−</button>
           <div style="display:flex;align-items:center;gap:5px;background:white;border:2px solid var(--primary);border-radius:7px;padding:5px 10px">
@@ -1990,9 +2099,9 @@ function renderPhaseFeedback(body, state) {
           </div>
           <button onclick="changeDuration(1)" style="width:30px;height:30px;border:2px solid var(--border);border-radius:7px;background:white;font-size:16px;font-weight:700;cursor:pointer;color:var(--primary);display:flex;align-items:center;justify-content:center">+</button>
         </div>
-        <button class="btn-next-phase" onclick="nextPhaseWithDuration()" style="width:100%;padding:10px;font-size:14px">▶ ${state.currentPhase+1}단계 시작</button>
+        <button class="btn-next-phase" onclick="nextPhaseWithDuration()" style="width:100%;padding:10px;font-size:14px">▶ ${phaseNum+1}단계 시작</button>
       </div>` : `<button class="btn-next-phase" onclick="nextPhase()" style="padding:12px 20px">💡 최종 피드백 보기</button>`}
-      <button class="btn-prev-phase" onclick="prevPhase()">◀ ${state.currentPhase}단계로 돌아가기</button>
+      <button class="btn-prev-phase" onclick="prevPhase()">◀ ${phaseNum}단계로 돌아가기</button>
     </div>` : `<p style="font-size:13px;color:var(--muted);margin-top:6px">모더레이터가 다음 단계를 진행합니다.</p>`;
 
   body.innerHTML = `<div style="flex:1">
@@ -2000,10 +2109,10 @@ function renderPhaseFeedback(body, state) {
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
         <div>
           <h3 style="display:flex;align-items:center;gap:8px">
-            <span style="background:${phase.color};color:white;border-radius:6px;padding:3px 10px;font-size:13px">${phase.emoji} ${state.currentPhase}단계</span>
+            <span style="background:${phase.color};color:white;border-radius:6px;padding:3px 10px;font-size:13px">${phase.emoji} ${phaseNum}단계</span>
             피드백 — ${phase.title}
           </h3>
-          <p style="font-size:13px;color:var(--muted);margin-top:6px">📅 ${phase.date} · 작성 내용을 정답 키워드와 비교하여 누락 항목을 확인하세요.</p>
+          <p style="font-size:13px;color:var(--muted);margin-top:6px">📅 ${phase.date} · ${isModerator ? '키워드 체크리스트를 클릭하여 직접 채점하세요.' : '모더레이터 채점 결과를 확인하세요.'}</p>
         </div>
         ${modControls}
       </div>
@@ -2233,6 +2342,8 @@ function renderFeedback() {
 
   ACTIVE_PHASES.forEach(phase => {
     const phaseResponses = responses[`phase${phase.id}`] || {};
+    const phaseScores = (state.scores && state.scores[`phase${phase.id}`]) || {};
+    const isModerator = myRole === '모더레이터';
     html += `<div class="fb-phase-section">
       <div class="fb-phase-title">
         <span class="fb-phase-badge" style="background:${phase.color}">${phase.emoji} ${phase.id}단계</span>
@@ -2245,29 +2356,9 @@ function renderFeedback() {
           if (!mission) return [];
           const participants = state.participants || {};
           const entries = getRoleEntries(phaseResponses, participants, role);
-          const multi = entries.length > 1 && !entries[0].isProxy;
           return entries.map(e => {
-            const text = e.text || '';
-            const submitted = e.submitted || false;
-            const isProxy = e.isProxy || false;
-            const nameTag = multi ? ` <span style="font-size:12px;font-weight:400;opacity:0.8">(${e.name})</span>` : '';
-            const found = mission.keywords.filter(kw => kwMatch(text, kw));
-            const score = mission.keywords.length > 0 ? Math.round(found.length / mission.keywords.length * 100) : 100;
-            const scoreClass = score >= 80 ? 'score-high' : score >= 50 ? 'score-mid' : 'score-low';
-            return `<div class="fb-card">
-              <div class="fb-card-header">
-                ${ROLE_ICONS[role]||''} ${role}${nameTag}
-                ${isProxy?'<span style="font-size:11px;opacity:0.8;margin-left:4px">(대리입력)</span>':''}
-                <span class="score-badge ${scoreClass}" style="float:right">${score}점</span>
-              </div>
-              <div class="fb-section"><h4>📝 작성한 내용 ${submitted?(isProxy?'(대리입력)':'(제출완료)'):'(미제출)'}</h4>
-                <p class="${!text?'empty':''}">${text?escapeHtml(text):'작성 내용 없음'}</p>
-              </div>
-              <div class="fb-section"><h4>✅ 정답 키워드 확인</h4>
-                <div class="keyword-check">${mission.keywords.map(kw=>{const hit=kwMatch(text, kw);return`<span class="${hit?'kw-found':'kw-miss'}">${hit?'✓':'✗'} ${kw}</span>`;}).join('')}</div>
-              </div>
-              <div class="fb-section"><h4>📌 모범 답안</h4><p style="font-size:12px;color:#555">${escapeHtml(mission.answer)}</p></div>
-            </div>`;
+            const savedChecks = phaseScores[e.key] ?? null;
+            return buildManualScoreCard(phase, phase.id, {...e, role}, savedChecks, isModerator);
           });
         }).join('')}
       </div>
