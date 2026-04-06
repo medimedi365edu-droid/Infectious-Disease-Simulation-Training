@@ -1273,6 +1273,8 @@ function normalizeState(data) {
     participants,
     responses,
     scores: (data.scores && typeof data.scores === 'object') ? data.scores : {},
+    scoreWeights: (data.scoreWeights && typeof data.scoreWeights === 'object') ? data.scoreWeights : {},
+    scoreSubmitted: (data.scoreSubmitted && typeof data.scoreSubmitted === 'object') ? data.scoreSubmitted : {},
     roleAnnouncement,
     scenarioId: data.scenarioId || '',
     groupNum: data.groupNum || '',
@@ -1288,7 +1290,7 @@ let _cachedState = null;
 
 function defaultState() {
   return { currentPhase: 0, phaseStartTime: null, timerRunning: false, timerPaused: false,
-    timerPausedRemaining: null, showingFeedback: false, participants: {}, responses: {}, scores: {}, roleAnnouncement: null };
+    timerPausedRemaining: null, showingFeedback: false, participants: {}, responses: {}, scores: {}, scoreWeights: {}, scoreSubmitted: {}, roleAnnouncement: null };
 }
 
 function getState() {
@@ -1566,6 +1568,14 @@ function renderLobby(body, state) {
 }
 
 let participantsPanelOpen = false;
+let proxyPanelOpen = false;
+function toggleProxySection() {
+  proxyPanelOpen = !proxyPanelOpen;
+  const body = document.getElementById('proxy-section-body');
+  const icon = document.getElementById('proxy-section-icon');
+  if (body) body.style.display = proxyPanelOpen ? '' : 'none';
+  if (icon) icon.textContent = proxyPanelOpen ? '▲' : '▼';
+}
 function toggleParticipantsPanel() {
   participantsPanelOpen = !participantsPanelOpen;
   const content = document.getElementById('participants-body-content');
@@ -1577,7 +1587,13 @@ function toggleParticipantsPanel() {
 function renderRoleReassignPanel(state) {
   const participants = state.participants || {};
   const nonMod = Object.values(participants).filter(p => p.role !== '모더레이터');
-  if (!nonMod.length) return '';
+  if (!nonMod.length) {
+    return `
+      <div style="background:white;border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 20px;margin-bottom:16px;border-left:4px solid #f39c12">
+        <h4 style="font-size:14px;font-weight:700;color:#e67e22;margin-bottom:6px">🔄 역할 재배정</h4>
+        <p style="font-size:12px;color:var(--muted)">현재 접속한 참가자가 없습니다. 참가자가 접속하면 역할 재배정 기능이 활성화됩니다.</p>
+      </div>`;
+  }
   const rows = nonMod.map(info => `
     <tr>
       <td style="padding:8px 12px;font-size:13px">${escapeHtml(info.name)}</td>
@@ -1716,10 +1732,20 @@ function renderPhase(body, state) {
           </div>
         </div>`;
     } else if (isPaused) {
-      // 일시정지 상태: 재개 + 초기화
+      // 일시정지 상태: 시간 수정 + 재개 + 초기화
+      const pausedMins = remaining !== null ? Math.max(1, Math.round(remaining / 60)) : 1;
       timerControlHtml = `
         <div style="background:#fff8f0;border:1.5px solid #e67e22;border-radius:10px;padding:14px 16px;margin-bottom:14px">
-          <div style="font-size:13px;font-weight:700;color:#e67e22;margin-bottom:10px">⏸ 일시정지됨 — ${remaining !== null ? formatTime(remaining) + ' 남음' : ''}</div>
+          <div style="font-size:13px;font-weight:700;color:#e67e22;margin-bottom:10px">⏸ 일시정지됨</div>
+          <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:8px">남은 시간 수정</div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+            <button onclick="changePausedDuration(-1)" style="width:34px;height:34px;border:2px solid var(--border);border-radius:8px;background:white;font-size:18px;font-weight:700;cursor:pointer;color:var(--primary);display:flex;align-items:center;justify-content:center;transition:all 0.15s" onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor='var(--border)'">−</button>
+            <div style="display:flex;align-items:center;gap:6px;background:white;border:2px solid #e67e22;border-radius:8px;padding:6px 14px">
+              <input type="number" id="paused-duration-input" value="${pausedMins}" min="1" max="60" style="width:38px;border:none;outline:none;font-size:18px;font-weight:800;font-family:inherit;text-align:center;color:#e67e22;background:transparent">
+              <span style="font-size:14px;font-weight:600;color:var(--muted)">분</span>
+            </div>
+            <button onclick="changePausedDuration(1)" style="width:34px;height:34px;border:2px solid var(--border);border-radius:8px;background:white;font-size:18px;font-weight:700;cursor:pointer;color:var(--primary);display:flex;align-items:center;justify-content:center;transition:all 0.15s" onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor='var(--border)'">+</button>
+          </div>
           <div style="display:flex;gap:8px">
             <button onclick="resumeTimer()" style="flex:1;padding:11px;background:#e67e22;border:2px solid #e67e22;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;color:white;font-family:inherit;transition:all 0.15s;display:flex;align-items:center;justify-content:center;gap:6px" onmouseover="this.style.background='#cf6d17'" onmouseout="this.style.background='#e67e22'">▶ 재개</button>
             <button onclick="resetPhaseTimer()" style="padding:11px 14px;background:white;border:2px solid var(--border);border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;color:var(--muted);font-family:inherit;transition:all 0.15s;display:flex;align-items:center;justify-content:center;gap:4px" onmouseover="this.style.borderColor='#c0392b';this.style.color='#c0392b'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">🔄 초기화</button>
@@ -1795,11 +1821,11 @@ function renderPhase(body, state) {
   if (submitted || myRole === '모더레이터' || !state.timerRunning) {
     const workAreaEl = body.querySelector('.work-area');
     if (workAreaEl) {
-      workAreaEl.insertAdjacentHTML('beforeend', buildInlineFeedbackHtml(phase, phaseResponses, state.participants||{}));
       if (myRole === '모더레이터') {
         const proxyHtml = renderProxySection(phase, phaseResponses, state.participants || {});
         if (proxyHtml) workAreaEl.insertAdjacentHTML('beforeend', proxyHtml);
       }
+      workAreaEl.insertAdjacentHTML('beforeend', buildInlineFeedbackHtml(phase, phaseResponses, state.participants||{}));
     }
   }
 
@@ -1867,9 +1893,14 @@ function renderProxySection(phase, phaseResponses, participants) {
 
   return `
     <div class="proxy-section">
-      <div class="proxy-section-header">🔄 미참여 역할 대리 입력</div>
-      <div class="proxy-section-desc">아래 역할은 현재 참가자가 없습니다. 모더레이터가 대신 답변을 입력할 수 있습니다.</div>
-      ${items}
+      <div style="cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between;padding:14px 18px 10px" onclick="toggleProxySection()">
+        <span style="font-weight:700;font-size:14px;color:#9b59b6">🔄 미참여 역할 대리 입력</span>
+        <span id="proxy-section-icon" style="font-size:11px;opacity:0.8;color:#9b59b6">${proxyPanelOpen?'▲':'▼'}</span>
+      </div>
+      <div id="proxy-section-body" style="display:${proxyPanelOpen?'':'none'}">
+        <div class="proxy-section-desc">아래 역할은 현재 참가자가 없습니다. 모더레이터가 대신 답변을 입력할 수 있습니다.</div>
+        ${items}
+      </div>
     </div>`;
 }
 
@@ -1942,6 +1973,28 @@ function editProxy(role) {
 // ═══════════════════════════════════════════════════════
 //  MANUAL SCORING (모더레이터 직접 채점)
 // ═══════════════════════════════════════════════════════
+
+// 기본 균등 배점 계산 (총 100점)
+function getDefaultWeights(keywords) {
+  const n = keywords.length;
+  if (!n) return [];
+  const base = Math.floor(100 / n);
+  const rem  = 100 - base * n;
+  return keywords.map((_, i) => base + (i < rem ? 1 : 0));
+}
+
+// 저장된 배점 또는 기본 균등 배점 반환
+function getWeightsForRole(state, phaseNum, role, keywords) {
+  const saved = (state.scoreWeights || {})[`phase${phaseNum}`]?.[role];
+  if (saved && Array.isArray(saved) && saved.length === keywords.length) return saved;
+  return getDefaultWeights(keywords);
+}
+
+// 배점 기반 점수 계산
+function calculateScore(checks, weights) {
+  return weights.reduce((sum, w, i) => sum + (checks[`kw${i}`] ? w : 0), 0);
+}
+
 function saveManualScore(phaseNum, roleKey, checks) {
   if (myRole !== '모더레이터') return;
   const state = getState();
@@ -1958,9 +2011,13 @@ function _refreshScoreBadge(phaseNum, roleKey, checks) {
   const badgeEl = document.getElementById(`score-badge-${phaseNum}-${roleKey}`);
   const barEl   = document.getElementById(`score-bar-${phaseNum}-${roleKey}`);
   const numEl   = document.getElementById(`score-num-${phaseNum}-${roleKey}`);
-  const total = Object.keys(checks).length;
-  const hit   = Object.values(checks).filter(Boolean).length;
-  const score = total > 0 ? Math.round(hit / total * 100) : 0;
+  // 배점 기반 점수 계산
+  const role     = roleKey.split(':')[0];
+  const st       = getState();
+  const mission  = (ACTIVE_PHASES[phaseNum - 1] || {}).missions?.[role];
+  const keywords = mission?.keywords || [];
+  const weights  = getWeightsForRole(st, phaseNum, role, keywords);
+  const score    = calculateScore(checks, weights);
   const cls   = score >= 80 ? 'score-high' : score >= 50 ? 'score-mid' : 'score-low';
   const bar   = score >= 80 ? '#27ae60' : score >= 50 ? '#e6b800' : '#c0392b';
   if (badgeEl) { badgeEl.className = `score-badge ${cls}`; badgeEl.textContent = `${score}점`; }
@@ -1988,37 +2045,64 @@ function toggleCheck(phaseNum, roleKey, kwIdx, totalKw) {
 function buildManualScoreCard(phase, phaseNum, entry, savedChecks, isModerator) {
   const mission = phase.missions[getBaseRole(entry.role)];
   if (!mission) return '';
-  const keywords = mission.keywords || [];
-  const checks   = savedChecks || {};
-  const total    = keywords.length;
-  const hit      = keywords.filter((_, i) => checks[`kw${i}`]).length;
-  const score    = total > 0 ? Math.round(hit / total * 100) : (savedChecks ? 0 : null);
-  const hasScore = savedChecks !== null && savedChecks !== undefined;
+  const keywords  = mission.keywords || [];
+  const checks    = savedChecks || {};
+  const st        = getState();
+  const rk        = entry.key;
+  const phaseKey  = `phase${phaseNum}`;
+  const isSubmitted = !!(st.scoreSubmitted?.[phaseKey]?.[rk]);
+  const weights   = getWeightsForRole(st, phaseNum, entry.role, keywords);
+  const score     = calculateScore(checks, weights);
+  const hasScore  = savedChecks !== null && savedChecks !== undefined;
   const scoreClass = !hasScore ? 'score-pending' : score >= 80 ? 'score-high' : score >= 50 ? 'score-mid' : 'score-low';
   const badgeText  = !hasScore ? '미채점' : `${score}점`;
   const barColor   = score >= 80 ? '#27ae60' : score >= 50 ? '#e6b800' : '#c0392b';
-  const rk = entry.key;
+  const nameTag   = entry.isProxy ? ' (대리입력)' : '';
+  const meTag     = entry.key === getRKey() ? '<span style="font-size:11px;opacity:0.8;margin-left:4px;color:#aed6f1">(나)</span>' : '';
+  const isMe      = entry.key === getRKey();
+
+  // 비모더레이터: 해당 카드가 제출 전이면 "채점 중" 표시
+  if (!isModerator && !isSubmitted) {
+    return `<div class="fb-card${isMe?' my-fb-card':''}">
+      <div class="fb-card-header" style="display:flex;align-items:center;justify-content:space-between">
+        <span>${ROLE_ICONS[entry.role]||''} ${entry.role}${nameTag?`<span style="font-size:11px;opacity:0.8;margin-left:4px">${nameTag}</span>`:''}${meTag}</span>
+        <span class="score-badge score-pending">채점 중</span>
+      </div>
+      <div class="fb-section"><h4>📝 작성 내용</h4>
+        <p class="${!entry.text?'empty':''}">${entry.text?escapeHtml(entry.text):'작성 내용 없음'}</p>
+      </div>
+      <div class="fb-section">
+        <p style="font-size:12px;color:var(--muted);padding:10px;background:#f7f9fc;border-radius:7px;text-align:center">⏳ 모더레이터가 채점 중입니다.<br>제출되면 결과가 표시됩니다.</p>
+      </div>
+      <div class="fb-section"><h4>📌 모범 답안</h4><p style="font-size:12px;color:#555;line-height:1.7">${escapeHtml(mission.answer)}</p></div>
+    </div>`;
+  }
+
+  const weightsTotal = weights.reduce((a, b) => a + b, 0);
+  const safeRole = entry.role.replace(/['"<>&]/g, '');
 
   const checklistRows = keywords.map((kw, i) => {
     const checked = !!checks[`kw${i}`];
     const autoHit = kwMatch(entry.text, kw);
-    const hint    = autoHit ? ' · 자동감지됨' : '';
     if (isModerator) {
-      return `<div id="ckrow-${phaseNum}-${rk}-${i}" class="checklist-row${checked?' checked':''}" onclick="toggleCheck(${phaseNum},'${rk}',${i},${total})">
+      return `<div id="ckrow-${phaseNum}-${rk}-${i}" class="checklist-row${checked?' checked':''}${isSubmitted?' mod-readonly':''}" ${isSubmitted?'':'onclick="toggleCheck('+phaseNum+',\''+rk+'\','+i+','+keywords.length+')"'}>
         <div class="checklist-box">${checked?'✓':''}</div>
-        <div><div class="kw-label">${escapeHtml(kw)}</div><div class="kw-sublabel">${autoHit?'🔍 텍스트에서 감지됨':'📝 내용 확인 후 체크'}</div></div>
+        <div style="flex:1"><div class="kw-label">${escapeHtml(kw)}</div><div class="kw-sublabel">${isSubmitted?(checked?'✅ 확인됨':'—'):(autoHit?'🔍 텍스트에서 감지됨':'📝 내용 확인 후 체크')}</div></div>
+        ${!isSubmitted ? `<div style="display:flex;align-items:center;gap:4px;flex-shrink:0" onclick="event.stopPropagation()">
+          <input type="number" value="${weights[i]}" min="0" max="100"
+            onchange="updateWeight(${phaseNum},'${safeRole}',${i},this.value)"
+            style="width:46px;border:1.5px solid var(--border);border-radius:5px;padding:3px 4px;font-size:13px;text-align:center;color:var(--primary);font-family:inherit;background:white;font-weight:700">
+          <span style="font-size:11px;color:var(--muted)">점</span>
+        </div>` : `<span style="font-size:12px;font-weight:700;color:var(--primary);flex-shrink:0">${weights[i]}점</span>`}
       </div>`;
     } else {
       return `<div class="checklist-row mod-readonly${checked?' checked':''}">
         <div class="checklist-box">${checked?'✓':''}</div>
-        <div><div class="kw-label">${escapeHtml(kw)}</div><div class="kw-sublabel">${checked?'✅ 확인됨':'—'}</div></div>
+        <div style="flex:1"><div class="kw-label">${escapeHtml(kw)}</div><div class="kw-sublabel">${checked?'✅ 확인됨':'—'}</div></div>
+        <span style="font-size:12px;font-weight:700;color:var(--primary);flex-shrink:0">${weights[i]}점</span>
       </div>`;
     }
   }).join('');
-
-  const nameTag = entry.isProxy ? ' (대리입력)' : '';
-  const meTag   = entry.key === getRKey() ? '<span style="font-size:11px;opacity:0.8;margin-left:4px;color:#aed6f1">(나)</span>' : '';
-  const isMe    = entry.key === getRKey();
 
   return `<div class="fb-card${isMe?' my-fb-card':''}">
     <div class="fb-card-header" style="display:flex;align-items:center;justify-content:space-between">
@@ -2029,16 +2113,29 @@ function buildManualScoreCard(phase, phaseNum, entry, savedChecks, isModerator) 
       <p class="${!entry.text?'empty':''}">${entry.text?escapeHtml(entry.text):'작성 내용 없음'}</p>
     </div>
     <div class="fb-section">
-      <h4>${isModerator?'🖊️ 채점 체크리스트 (클릭하여 체크)':'📋 채점 결과'}</h4>
+      <h4>${isModerator?'🖊️ 채점 체크리스트':'📋 채점 결과'}</h4>
       ${checklistRows || '<p style="color:var(--muted);font-size:12px">키워드 없음</p>'}
+      ${isModerator && !isSubmitted ? `
+        <div style="display:flex;align-items:center;justify-content:space-between;background:#f0f4fa;border-radius:7px;padding:8px 12px;margin-top:8px">
+          <span style="font-size:12px;color:var(--muted)">배점 합계</span>
+          <span id="weight-total-${phaseNum}-${safeRole}" style="font-size:14px;font-weight:700;color:${weightsTotal===100?'#27ae60':'#c0392b'}">${weightsTotal}점 ${weightsTotal===100?'✓':'(100점이 되도록 조정)'}</span>
+        </div>` : ''}
       ${hasScore ? `
       <div class="manual-score-total">
         <div><div class="manual-score-label">${isModerator?'현재 점수':'모더레이터 채점'}</div></div>
-        <div id="score-num-${phaseNum}-${rk}" class="manual-score-num" style="color:${!hasScore?'var(--primary)':score>=80?'#1e8449':score>=50?'#b7950b':'#c0392b'}">${badgeText}</div>
+        <div id="score-num-${phaseNum}-${rk}" class="manual-score-num" style="color:${score>=80?'#1e8449':score>=50?'#b7950b':'#c0392b'}">${badgeText}</div>
       </div>
       <div class="score-bar-wrap"><div id="score-bar-${phaseNum}-${rk}" class="score-bar" style="width:${score}%;background:${barColor}"></div></div>
-      ` : isModerator ? `<p style="font-size:11px;color:var(--muted);margin-top:8px">💡 키워드를 체크하면 점수가 자동 계산됩니다</p>` : `<p style="font-size:12px;color:var(--muted);margin-top:8px;font-style:italic">모더레이터가 아직 채점 중입니다</p>`}
+      ` : isModerator ? `<p style="font-size:11px;color:var(--muted);margin-top:8px">💡 키워드를 체크하면 점수가 자동 계산됩니다</p>` : ''}
     </div>
+    ${isModerator ? `
+    <div style="padding:10px 0 2px;display:flex;align-items:center;justify-content:flex-end;gap:8px">
+      ${!isSubmitted
+        ? `<button onclick="submitScores(${phaseNum},'${rk}')" style="padding:7px 18px;background:#1a3a5c;color:white;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:background 0.2s" onmouseover="this.style.background='#244f7a'" onmouseout="this.style.background='#1a3a5c'">✅ 제출하기</button>`
+        : `<span style="font-size:12px;font-weight:600;color:#27ae60">✅ 제출됨</span>
+           <button onclick="editScores(${phaseNum},'${rk}')" style="padding:7px 16px;background:white;color:#e67e22;border:2px solid #e67e22;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all 0.2s" onmouseover="this.style.background='#fef9f0'" onmouseout="this.style.background='white'">✏️ 수정하기</button>`
+      }
+    </div>` : ''}
     <div class="fb-section"><h4>📌 모범 답안</h4><p style="font-size:12px;color:#555;line-height:1.7">${escapeHtml(mission.answer)}</p></div>
   </div>`;
 }
@@ -2106,13 +2203,13 @@ function renderPhaseFeedback(body, state) {
 
   body.innerHTML = `<div style="flex:1">
     <div class="fb-summary" style="margin-bottom:20px">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
-        <div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px">
+        <div style="flex:1;min-width:0">
           <h3 style="display:flex;align-items:center;gap:8px">
             <span style="background:${phase.color};color:white;border-radius:6px;padding:3px 10px;font-size:13px">${phase.emoji} ${phaseNum}단계</span>
             피드백 — ${phase.title}
           </h3>
-          <p style="font-size:13px;color:var(--muted);margin-top:6px">📅 ${phase.date} · ${isModerator ? '키워드 체크리스트를 클릭하여 직접 채점하세요.' : '모더레이터 채점 결과를 확인하세요.'}</p>
+          <p style="font-size:13px;color:var(--muted);margin-top:6px">📅 ${phase.date} · ${isModerator ? '채점 체크리스트를 클릭해 채점하고 제출하세요.' : '모더레이터 채점 결과를 확인하세요.'}</p>
         </div>
         ${modControls}
       </div>
@@ -2187,8 +2284,9 @@ function startPhase(phaseNum, durationSeconds) {
     });
     state.roleAnnouncement = null;
   }
-  state.currentPhase = phaseNum; state.phaseStartTime = Date.now();
-  state.timerRunning = true; state.showingFeedback = false;
+  state.currentPhase = phaseNum; state.phaseStartTime = null;
+  state.timerRunning = false; state.timerPaused = false; state.timerPausedRemaining = null;
+  state.showingFeedback = false;
   saveState(state); broadcast('PHASE_CHANGE', { phase: phaseNum }); renderExercise();
 }
 function changeDuration(delta) {
@@ -2219,11 +2317,21 @@ function resumeTimer() {
   if (myRole !== '모더레이터') return;
   const state = getState();
   if (!state.timerRunning || !state.timerPaused) return;
-  const remaining = state.timerPausedRemaining != null ? state.timerPausedRemaining : 0;
+  // 일시정지 중 시간 수정 입력값 우선 사용
+  const inp = document.getElementById('paused-duration-input');
+  const remaining = inp
+    ? Math.max(1, Math.min(60, parseInt(inp.value) || 1)) * 60
+    : (state.timerPausedRemaining != null ? state.timerPausedRemaining : 0);
   state.timerPaused = false;
   state.timerPausedRemaining = null;
   state.phaseStartTime = Date.now() - ((state.phaseDuration || 300) - remaining) * 1000;
   saveState(state); broadcast('STATE_CHANGED', {}); renderExercise();
+}
+function changePausedDuration(delta) {
+  const inp = document.getElementById('paused-duration-input');
+  if (!inp) return;
+  const cur = parseInt(inp.value) || 1;
+  inp.value = Math.max(1, Math.min(60, cur + delta));
 }
 function resetPhaseTimer() {
   if (myRole !== '모더레이터') return;
@@ -2236,6 +2344,54 @@ function resetPhaseTimer() {
   state.timerPaused = false;
   state.timerPausedRemaining = null;
   saveState(state); broadcast('STATE_CHANGED', {}); renderExercise();
+}
+
+// ─── 채점 제출 / 수정 ────────────────────────────────────
+function submitScores(phaseNum, roleKey) {
+  if (myRole !== '모더레이터') return;
+  const state = getState();
+  if (!state.scoreSubmitted) state.scoreSubmitted = {};
+  const pk = `phase${phaseNum}`;
+  if (!state.scoreSubmitted[pk] || typeof state.scoreSubmitted[pk] !== 'object') state.scoreSubmitted[pk] = {};
+  state.scoreSubmitted[pk][roleKey] = true;
+  saveState(state); broadcast('STATE_CHANGED', {}); renderExercise();
+}
+
+function editScores(phaseNum, roleKey) {
+  if (myRole !== '모더레이터') return;
+  const state = getState();
+  if (!state.scoreSubmitted) state.scoreSubmitted = {};
+  const pk = `phase${phaseNum}`;
+  if (!state.scoreSubmitted[pk] || typeof state.scoreSubmitted[pk] !== 'object') state.scoreSubmitted[pk] = {};
+  state.scoreSubmitted[pk][roleKey] = false;
+  saveState(state); broadcast('STATE_CHANGED', {}); renderExercise();
+}
+
+// ─── 배점 수정 ───────────────────────────────────────────
+function updateWeight(phaseNum, role, kwIdx, value) {
+  if (myRole !== '모더레이터') return;
+  const state   = getState();
+  const phaseKey = `phase${phaseNum}`;
+  if (!state.scoreWeights) state.scoreWeights = {};
+  if (!state.scoreWeights[phaseKey]) state.scoreWeights[phaseKey] = {};
+  const keywords = (ACTIVE_PHASES[phaseNum - 1] || {}).missions?.[role]?.keywords || [];
+  const cur = getWeightsForRole(state, phaseNum, role, keywords).slice();
+  cur[kwIdx] = Math.max(0, Math.min(100, parseInt(value) || 0));
+  state.scoreWeights[phaseKey][role] = cur;
+  // 합계 표시 즉시 DOM 업데이트
+  const total = cur.reduce((a, b) => a + b, 0);
+  const safeRole = role.replace(/['"<>&]/g, '');
+  const totalEl = document.getElementById(`weight-total-${phaseNum}-${safeRole}`);
+  if (totalEl) {
+    totalEl.textContent = `${total}점 ${total === 100 ? '✓' : '(100점이 되도록 조정)'}`;
+    totalEl.style.color = total === 100 ? '#27ae60' : '#c0392b';
+  }
+  // 해당 역할의 각 점수 배지 즉시 갱신
+  const phaseScores = (state.scores && state.scores[phaseKey]) || {};
+  Object.keys(phaseScores).forEach(rk => {
+    if (rk.split(':')[0] === role) _refreshScoreBadge(phaseNum, rk, phaseScores[rk]);
+  });
+  saveState(state); broadcast('STATE_CHANGED', {});
 }
 function nextPhaseWithDuration() {
   if (myRole !== '모더레이터') return;
