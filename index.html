@@ -1064,7 +1064,7 @@ function selectScenario(id) {
   // STORAGE_KEY / CHANNEL_NAME will be set after group selection
 
   document.getElementById('login-scenario-icon').textContent = sc.emoji;
-  document.getElementById('login-scenario-title').innerHTML = `${sc.name} 위기대응<br>협력 훈련;
+  document.getElementById('login-scenario-title').innerHTML = `${sc.name} 위기대응<br>협력 훈련`;
 
   // Update phase bar labels
   ACTIVE_PHASES.forEach((p, i) => {
@@ -1075,7 +1075,7 @@ function selectScenario(id) {
   // Render group buttons
   const NUM_GROUPS = getGroupCount(); // 관리자 설정값 사용
   const groupGrid = document.getElementById('group-grid');
-  const groupEmojis = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣'];
+  const groupEmojis = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
   groupGrid.innerHTML = Array.from({length: NUM_GROUPS}, (_, i) => `
     <button class="group-btn" data-group="${i+1}" onclick="selectGroup(${i+1})">
       <span class="group-icon">${groupEmojis[i]}</span>${i+1}조
