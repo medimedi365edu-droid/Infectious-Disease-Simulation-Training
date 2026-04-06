@@ -171,7 +171,7 @@
 
   .ex-body { display: flex; gap: 20px; padding: 20px 24px; flex: 1; }
 
-  .scenario-panel { width: 300px; flex-shrink: 0; }
+  .scenario-panel { width: 300px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; align-self: flex-start; }
   .scenario-card {
     background: white; border-radius: var(--radius); box-shadow: var(--shadow);
     overflow: hidden; margin-bottom: 16px;
@@ -1672,26 +1672,33 @@ function renderPhase(body, state) {
   const submitted = phaseResponses[`${getRKey()}_submitted`] || false;
   const myMission = phase.missions[getBaseRole(myRole)];
 
+  const scenarioCardHtml = `
+    <div class="scenario-card">
+      <div class="scenario-header ${phase.colorClass}">
+        ${phase.emoji} ${state.currentPhase}단계 상황
+      </div>
+      <div class="scenario-body">
+        <div class="date-tag">📅 ${phase.date}</div>
+        <p>${phase.situation}</p>
+      </div>
+    </div>`;
+
+  const participantsCardHtml = `
+    <div class="participants-card">
+      <h3 style="cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between" onclick="toggleParticipantsPanel()">
+        <span>👥 참가자 현황</span>
+        <span id="participants-toggle-icon" style="font-size:11px;opacity:0.8">${participantsPanelOpen?'▲':'▼'}</span>
+      </h3>
+      <div id="participants-body-content" style="display:${participantsPanelOpen?'':'none'}">
+        ${renderParticipantsList(state, state.currentPhase)}
+      </div>
+    </div>`;
+
+  // 참가자용: 시나리오 + 참가자현황 (좌측 패널)
   const scenarioHtml = `
     <div class="scenario-panel">
-      <div class="scenario-card">
-        <div class="scenario-header ${phase.colorClass}">
-          ${phase.emoji} ${state.currentPhase}단계 상황
-        </div>
-        <div class="scenario-body">
-          <div class="date-tag">📅 ${phase.date}</div>
-          <p>${phase.situation}</p>
-        </div>
-      </div>
-      <div class="participants-card">
-        <h3 style="cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between" onclick="toggleParticipantsPanel()">
-          <span>👥 참가자 현황</span>
-          <span id="participants-toggle-icon" style="font-size:11px;opacity:0.8">${participantsPanelOpen?'▲':'▼'}</span>
-        </h3>
-        <div id="participants-body-content" style="display:${participantsPanelOpen?'':'none'}">
-          ${renderParticipantsList(state, state.currentPhase)}
-        </div>
-      </div>
+      ${scenarioCardHtml}
+      ${participantsCardHtml}
     </div>`;
 
   let workHtml = '';
@@ -1753,23 +1760,79 @@ function renderPhase(body, state) {
         </div>`;
     }
 
-    workHtml = `
-      <div class="work-area">
-        <div class="moderator-panel-card">
-          <h3>🎙️ 진행자 컨트롤 패널</h3>
-          ${timerControlHtml}
-          <div class="ctrl-row">
-            ${state.currentPhase > 0 ? `<button class="btn-prev-phase" onclick="prevPhase()">◀ 이전 단계</button>` : ''}
-            ${state.timerRunning
-              ? `<button class="btn-next-phase" onclick="nextPhase()" style="background:#8e44ad">⏭ 지금 피드백 보기</button>`
-              : `<button class="btn-next-phase" onclick="nextPhase()">💡 피드백 보기</button>`}
+    // 컴팩트 타이머 UI (좌측 패널용)
+    let timerCompactHtml = '';
+    if (notStarted) {
+      timerCompactHtml = `
+        <div style="background:#f7f9fc;border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px">
+          <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:8px">⏱ ${state.currentPhase}단계 시간 설정</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+            <button onclick="changeDuration(-1)" style="width:28px;height:28px;border:1.5px solid var(--border);border-radius:6px;background:white;font-size:15px;font-weight:700;cursor:pointer;color:var(--primary);display:flex;align-items:center;justify-content:center" onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor='var(--border)'">−</button>
+            <div style="display:flex;align-items:center;gap:4px;background:white;border:1.5px solid var(--primary);border-radius:6px;padding:4px 10px">
+              <input type="number" id="duration-input" value="${durMins}" min="1" max="60" style="width:32px;border:none;outline:none;font-size:15px;font-weight:800;font-family:inherit;text-align:center;color:var(--primary);background:transparent">
+              <span style="font-size:12px;font-weight:600;color:var(--muted)">분</span>
+            </div>
+            <button onclick="changeDuration(1)" style="width:28px;height:28px;border:1.5px solid var(--border);border-radius:6px;background:white;font-size:15px;font-weight:700;cursor:pointer;color:var(--primary);display:flex;align-items:center;justify-content:center" onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor='var(--border)'">+</button>
           </div>
-          <div style="margin-top:14px;padding-top:12px;border-top:1px solid #f5e0c0">
-            <button onclick="resetAll()" style="padding:8px 18px;background:white;color:#c0392b;border:2px solid #c0392b;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all 0.2s" onmouseover="this.style.background='#c0392b';this.style.color='white'" onmouseout="this.style.background='white';this.style.color='#c0392b'">🔄 훈련 초기화</button>
-            <span style="font-size:11px;color:var(--muted);margin-left:8px">모든 응답이 삭제되고 처음부터 다시 시작됩니다</span>
+          <button class="btn-start-timer" onclick="startTimer()" style="width:100%;padding:9px;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px">
+            ▶ ${state.currentPhase}단계 시작
+          </button>
+        </div>`;
+    } else if (isRunning) {
+      timerCompactHtml = `
+        <div style="background:#f0fff4;border:1.5px solid #27ae60;border-radius:8px;padding:10px 12px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:15px;font-weight:800;color:#27ae60">⏱ ${remaining !== null ? formatTime(remaining) : ''} 남음</span>
+          <div style="display:flex;gap:6px">
+            <button onclick="pauseTimer()" style="padding:6px 10px;background:white;border:1.5px solid #e67e22;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;color:#e67e22;font-family:inherit" onmouseover="this.style.background='#fef9f0'" onmouseout="this.style.background='white'">⏸ 일시정지</button>
+            <button onclick="resetPhaseTimer()" style="padding:6px 8px;background:white;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;color:var(--muted);font-family:inherit" onmouseover="this.style.borderColor='#c0392b';this.style.color='#c0392b'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">🔄</button>
+          </div>
+        </div>`;
+    } else if (isPaused) {
+      const pausedMins = remaining !== null ? Math.max(1, Math.round(remaining / 60)) : 1;
+      timerCompactHtml = `
+        <div style="background:#fff8f0;border:1.5px solid #e67e22;border-radius:8px;padding:10px 12px;margin-bottom:10px">
+          <div style="font-size:11px;font-weight:700;color:#e67e22;margin-bottom:8px">⏸ 일시정지됨 — 남은 시간 수정</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+            <button onclick="changePausedDuration(-1)" style="width:28px;height:28px;border:1.5px solid var(--border);border-radius:6px;background:white;font-size:15px;font-weight:700;cursor:pointer;color:var(--primary);display:flex;align-items:center;justify-content:center" onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor='var(--border)'">−</button>
+            <div style="display:flex;align-items:center;gap:4px;background:white;border:1.5px solid #e67e22;border-radius:6px;padding:4px 10px">
+              <input type="number" id="paused-duration-input" value="${pausedMins}" data-exact-secs="${remaining !== null ? Math.round(remaining) : pausedMins * 60}" min="1" max="60" style="width:32px;border:none;outline:none;font-size:15px;font-weight:800;font-family:inherit;text-align:center;color:#e67e22;background:transparent">
+              <span style="font-size:12px;font-weight:600;color:var(--muted)">분</span>
+            </div>
+            <button onclick="changePausedDuration(1)" style="width:28px;height:28px;border:1.5px solid var(--border);border-radius:6px;background:white;font-size:15px;font-weight:700;cursor:pointer;color:var(--primary);display:flex;align-items:center;justify-content:center" onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor='var(--border)'">+</button>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button onclick="resumeTimer()" style="flex:1;padding:8px;background:#e67e22;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;color:white;font-family:inherit" onmouseover="this.style.background='#cf6d17'" onmouseout="this.style.background='#e67e22'">▶ 재개</button>
+            <button onclick="resetPhaseTimer()" style="padding:8px 10px;background:white;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;color:var(--muted);font-family:inherit" onmouseover="this.style.borderColor='#c0392b';this.style.color='#c0392b'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">🔄</button>
+          </div>
+        </div>`;
+    }
+
+    // 좌측: 컴팩트 진행자 컨트롤 + 참가자현황
+    const modLeftHtml = `
+      <div class="scenario-panel">
+        <div class="moderator-panel-card">
+          <h3 style="font-size:13px;margin-bottom:10px">🎙️ 진행자 컨트롤 패널</h3>
+          ${timerCompactHtml}
+          <div class="ctrl-row" style="margin-bottom:10px">
+            ${state.currentPhase > 0 ? `<button class="btn-prev-phase" onclick="prevPhase()" style="font-size:12px;padding:8px 12px">◀ 이전</button>` : ''}
+            ${state.timerRunning
+              ? `<button class="btn-next-phase" onclick="nextPhase()" style="background:#8e44ad;font-size:12px;padding:8px 12px">⏭ 지금 피드백</button>`
+              : `<button class="btn-next-phase" onclick="nextPhase()" style="font-size:12px;padding:8px 12px">💡 피드백 보기</button>`}
+          </div>
+          <div style="padding-top:8px;border-top:1px solid #f5e0c0">
+            <button onclick="resetAll()" style="width:100%;padding:7px;background:white;color:#c0392b;border:1.5px solid #c0392b;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all 0.2s" onmouseover="this.style.background='#c0392b';this.style.color='white'" onmouseout="this.style.background='white';this.style.color='#c0392b'">🔄 훈련 초기화</button>
           </div>
         </div>
+        ${participantsCardHtml}
       </div>`;
+
+    // 우측: 시나리오 카드 (상단) + 피드백은 insertAdjacentHTML로 추가
+    workHtml = `<div class="work-area">${scenarioCardHtml}</div>`;
+
+    // 모더레이터 전용: 좌측=컨트롤+참가자, 우측=시나리오+피드백
+    body.classList.remove('mod-exercise');
+    body.innerHTML = modLeftHtml + workHtml;
+    // 이후 proxy/feedback 삽입은 공통 로직에서 처리
   } else if (!myMission) {
     workHtml = `
       <div class="work-area">
@@ -1810,22 +1873,25 @@ function renderPhase(body, state) {
       </div>`;
   }
 
-  body.innerHTML = scenarioHtml + workHtml;
+  if (myRole !== '모더레이터') {
+    body.classList.remove('mod-exercise');
+    body.innerHTML = scenarioHtml + workHtml;
+  }
 
   // 역할 재배정 공지 배너 삽입 (모든 역할에게 표시)
   if (state.roleAnnouncement) {
-    const workAreaEl = body.querySelector('.work-area');
-    if (workAreaEl) workAreaEl.insertAdjacentHTML('afterbegin', renderRoleAnnouncementBanner(state));
+    const insertTarget = body.querySelector('.work-area');
+    if (insertTarget) insertTarget.insertAdjacentHTML('afterbegin', renderRoleAnnouncementBanner(state));
   }
 
   if (submitted || myRole === '모더레이터' || !state.timerRunning) {
-    const workAreaEl = body.querySelector('.work-area');
-    if (workAreaEl) {
+    const insertTarget = body.querySelector('.work-area');
+    if (insertTarget) {
       if (myRole === '모더레이터') {
         const proxyHtml = renderProxySection(phase, phaseResponses, state.participants || {});
-        if (proxyHtml) workAreaEl.insertAdjacentHTML('beforeend', proxyHtml);
+        if (proxyHtml) insertTarget.insertAdjacentHTML('beforeend', proxyHtml);
       }
-      workAreaEl.insertAdjacentHTML('beforeend', buildInlineFeedbackHtml(phase, phaseResponses, state.participants||{}));
+      insertTarget.insertAdjacentHTML('beforeend', buildInlineFeedbackHtml(phase, phaseResponses, state.participants||{}));
     }
   }
 
@@ -2317,11 +2383,19 @@ function resumeTimer() {
   if (myRole !== '모더레이터') return;
   const state = getState();
   if (!state.timerRunning || !state.timerPaused) return;
-  // 일시정지 중 시간 수정 입력값 우선 사용
   const inp = document.getElementById('paused-duration-input');
-  const remaining = inp
-    ? Math.max(1, Math.min(60, parseInt(inp.value) || 1)) * 60
-    : (state.timerPausedRemaining != null ? state.timerPausedRemaining : 0);
+  let remaining;
+  if (inp) {
+    const currentMins = parseInt(inp.value) || 1;
+    const exactSecs = parseInt(inp.dataset.exactSecs);
+    // 사용자가 분을 변경했는지 확인: 변경 없으면 정확한 초 사용, 변경했으면 분 단위로 적용
+    const originalMins = Math.max(1, Math.round(exactSecs / 60));
+    remaining = (currentMins !== originalMins)
+      ? Math.max(1, Math.min(60, currentMins)) * 60
+      : exactSecs;
+  } else {
+    remaining = state.timerPausedRemaining != null ? state.timerPausedRemaining : 0;
+  }
   state.timerPaused = false;
   state.timerPausedRemaining = null;
   state.phaseStartTime = Date.now() - ((state.phaseDuration || 300) - remaining) * 1000;
