@@ -709,7 +709,7 @@
   <div class="login-card">
     <div class="login-logo">
       <span class="icon" id="login-scenario-icon">🏫</span>
-      <h1 id="login-scenario-title">감염병 위기대응<br>협력 훈련 (도상훈련)</h1>
+      <h1 id="login-scenario-title">감염병 위기대응<br>협력 훈련</h1>
       <p>Tabletop Exercise · 감염병 대응 모의훈련</p>
     </div>
     <div class="form-group">
@@ -989,6 +989,7 @@ function getGroupCount() {
 }
 function saveGroupCount(n) {
   localStorage.setItem('ttx_group_count', String(n));
+  if (typeof db !== 'undefined') db.ref('settings/groupCount').set(n);
 }
 function changeGroupCount(delta) {
   let n = Math.min(MAX_GROUPS, Math.max(MIN_GROUPS, getGroupCount() + delta));
@@ -1063,7 +1064,7 @@ function selectScenario(id) {
   // STORAGE_KEY / CHANNEL_NAME will be set after group selection
 
   document.getElementById('login-scenario-icon').textContent = sc.emoji;
-  document.getElementById('login-scenario-title').innerHTML = `${sc.name} 위기대응<br>협력 훈련 (도상훈련)`;
+  document.getElementById('login-scenario-title').innerHTML = `${sc.name} 위기대응<br>협력 훈련;
 
   // Update phase bar labels
   ACTIVE_PHASES.forEach((p, i) => {
@@ -1074,7 +1075,7 @@ function selectScenario(id) {
   // Render group buttons
   const NUM_GROUPS = getGroupCount(); // 관리자 설정값 사용
   const groupGrid = document.getElementById('group-grid');
-  const groupEmojis = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
+  const groupEmojis = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣'];
   groupGrid.innerHTML = Array.from({length: NUM_GROUPS}, (_, i) => `
     <button class="group-btn" data-group="${i+1}" onclick="selectGroup(${i+1})">
       <span class="group-icon">${groupEmojis[i]}</span>${i+1}조
@@ -1195,6 +1196,7 @@ async function createRoom(scenarioId, groupNum) {
   state.scenarioId = scenarioId;
   state.groupNum = groupNum;
   state.roomCode = roomCode;
+  state.groupCount = getGroupCount();
   state.createdAt = Date.now();
   _cachedState = normalizeState(state); // 즉시 캐시
   await dbRef.set(state);
@@ -2859,10 +2861,17 @@ function escAttr(str) {
 renderHomeScenarios();
 
 window.addEventListener('load', async () => {
+  // Firebase 전역 설정에서 groupCount 로드
+  try {
+    const snap = await db.ref('settings/groupCount').get();
+    if (snap.exists()) localStorage.setItem('ttx_group_count', String(snap.val()));
+  } catch(e) {}
+
   // URL에 room 파라미터가 있으면 바로 로그인 화면으로 이동
   const urlParams = new URLSearchParams(location.search);
   const roomParam = urlParams.get('room');
   if (roomParam) {
+
     // room 코드에서 시나리오 ID, 그룹 번호 파싱 시도
     // 형식: INFL-3조-XXXX
     const parts = roomParam.split('-');
