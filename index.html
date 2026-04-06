@@ -581,6 +581,8 @@
     .fb-header h1 { font-size: 18px; }
     .fb-body { padding: 16px 14px; }
     .fb-grid { grid-template-columns: 1fr; }
+    .fb-summary h3 { flex-wrap: wrap; word-break: keep-all; }
+    .fb-summary { padding: 14px 16px; }
 
     /* 대기실(로비) */
     .lobby-card { padding: 28px 20px; }
@@ -1884,13 +1886,12 @@ function renderPhase(body, state) {
     if (insertTarget) insertTarget.insertAdjacentHTML('afterbegin', renderRoleAnnouncementBanner(state));
   }
 
-  if (submitted || myRole === '모더레이터' || !state.timerRunning) {
+  // 모더레이터만 훈련 중 채점 카드 표시 — 참가자는 피드백 보기(showingFeedback) 시에만 노출
+  if (myRole === '모더레이터') {
     const insertTarget = body.querySelector('.work-area');
     if (insertTarget) {
-      if (myRole === '모더레이터') {
-        const proxyHtml = renderProxySection(phase, phaseResponses, state.participants || {});
-        if (proxyHtml) insertTarget.insertAdjacentHTML('beforeend', proxyHtml);
-      }
+      const proxyHtml = renderProxySection(phase, phaseResponses, state.participants || {});
+      if (proxyHtml) insertTarget.insertAdjacentHTML('beforeend', proxyHtml);
       insertTarget.insertAdjacentHTML('beforeend', buildInlineFeedbackHtml(phase, phaseResponses, state.participants||{}));
     }
   }
@@ -2270,10 +2271,10 @@ function renderPhaseFeedback(body, state) {
   body.innerHTML = `<div style="flex:1">
     <div class="fb-summary" style="margin-bottom:20px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px">
-        <div style="flex:1;min-width:0">
-          <h3 style="display:flex;align-items:center;gap:8px">
-            <span style="background:${phase.color};color:white;border-radius:6px;padding:3px 10px;font-size:13px">${phase.emoji} ${phaseNum}단계</span>
-            피드백 — ${phase.title}
+        <div style="flex:1;min-width:180px">
+          <h3 style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;word-break:keep-all">
+            <span style="background:${phase.color};color:white;border-radius:6px;padding:3px 10px;font-size:13px;white-space:nowrap">${phase.emoji} ${phaseNum}단계</span>
+            <span>피드백 — ${phase.title}</span>
           </h3>
           <p style="font-size:13px;color:var(--muted);margin-top:6px">📅 ${phase.date} · ${isModerator ? '채점 체크리스트를 클릭해 채점하고 제출하세요.' : '모더레이터 채점 결과를 확인하세요.'}</p>
         </div>
