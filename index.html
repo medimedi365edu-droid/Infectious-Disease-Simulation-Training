@@ -347,11 +347,14 @@
   .fb-phase-section { margin-bottom: 36px; }
   .fb-phase-title {
     font-size: 18px; font-weight: 700; margin-bottom: 16px;
-    padding-bottom: 10px; border-bottom: 2px solid var(--border);
+    padding: 12px 16px; border-radius: 8px;
+    background: #f7f9fc; border: 1.5px solid var(--border);
     display: flex; align-items: center; gap: 10px;
+    transition: background 0.15s;
   }
+  .fb-phase-title:hover { background: #eef2f7; }
   .fb-phase-badge { padding: 4px 14px; border-radius: 20px; color: white; font-size: 13px; }
-  .fb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+  .fb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; padding: 14px 0 4px; }
   .fb-card { background: white; border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
   .fb-card-header { padding: 12px 16px; font-weight: 700; font-size: 14px; background: var(--primary); color: white; }
   .my-fb-card { border: 2px solid var(--primary); box-shadow: 0 0 0 3px rgba(26,58,92,0.12); }
@@ -1277,6 +1280,7 @@ function normalizeState(data) {
     scores: (data.scores && typeof data.scores === 'object') ? data.scores : {},
     scoreWeights: (data.scoreWeights && typeof data.scoreWeights === 'object') ? data.scoreWeights : {},
     scoreSubmitted: (data.scoreSubmitted && typeof data.scoreSubmitted === 'object') ? data.scoreSubmitted : {},
+    roleHistory: (data.roleHistory && typeof data.roleHistory === 'object') ? data.roleHistory : {},
     roleAnnouncement,
     scenarioId: data.scenarioId || '',
     groupNum: data.groupNum || '',
@@ -1292,7 +1296,7 @@ let _cachedState = null;
 
 function defaultState() {
   return { currentPhase: 0, phaseStartTime: null, timerRunning: false, timerPaused: false,
-    timerPausedRemaining: null, showingFeedback: false, participants: {}, responses: {}, scores: {}, scoreWeights: {}, scoreSubmitted: {}, roleAnnouncement: null };
+    timerPausedRemaining: null, showingFeedback: false, participants: {}, responses: {}, scores: {}, scoreWeights: {}, scoreSubmitted: {}, roleHistory: {}, roleAnnouncement: null };
 }
 
 function getState() {
@@ -1571,6 +1575,14 @@ function renderLobby(body, state) {
 
 let participantsPanelOpen = false;
 let proxyPanelOpen = false;
+function toggleFbSection(bodyId, iconId) {
+  const body = document.getElementById(bodyId);
+  const icon = document.getElementById(iconId);
+  if (!body) return;
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'block';
+  if (icon) icon.textContent = isOpen ? '▼' : '▲';
+}
 function toggleProxySection() {
   proxyPanelOpen = !proxyPanelOpen;
   const body = document.getElementById('proxy-section-body');
@@ -1810,8 +1822,7 @@ function renderPhase(body, state) {
     }
 
     // 좌측: 컴팩트 진행자 컨트롤 + 참가자현황
-    const modLeftHtml = `
-      <div class="scenario-panel">
+    const modControlPanelHtml = `
         <div class="moderator-panel-card">
           <h3 style="font-size:13px;margin-bottom:10px">🎙️ 진행자 컨트롤 패널</h3>
           ${timerCompactHtml}
@@ -1824,16 +1835,19 @@ function renderPhase(body, state) {
           <div style="padding-top:8px;border-top:1px solid #f5e0c0">
             <button onclick="resetAll()" style="width:100%;padding:7px;background:white;color:#c0392b;border:1.5px solid #c0392b;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all 0.2s" onmouseover="this.style.background='#c0392b';this.style.color='white'" onmouseout="this.style.background='white';this.style.color='#c0392b'">🔄 훈련 초기화</button>
           </div>
-        </div>
+        </div>`;
+
+    // 좌측: 시나리오 카드, 우측: 컨트롤 패널 + 참가자현황
+    workHtml = `<div class="work-area">${scenarioCardHtml}</div>`;
+    const modRightHtml = `
+      <div class="scenario-panel">
+        ${modControlPanelHtml}
         ${participantsCardHtml}
       </div>`;
 
-    // 우측: 시나리오 카드 (상단) + 피드백은 insertAdjacentHTML로 추가
-    workHtml = `<div class="work-area">${scenarioCardHtml}</div>`;
-
-    // 모더레이터 전용: 좌측=컨트롤+참가자, 우측=시나리오+피드백
+    // 모더레이터 전용: 좌측=시나리오, 우측=컨트롤+참가자
     body.classList.remove('mod-exercise');
-    body.innerHTML = modLeftHtml + workHtml;
+    body.innerHTML = workHtml + modRightHtml;
     // 이후 proxy/feedback 삽입은 공통 로직에서 처리
   } else if (!myMission) {
     workHtml = `
@@ -2109,7 +2123,7 @@ function toggleCheck(phaseNum, roleKey, kwIdx, totalKw) {
   saveManualScore(phaseNum, roleKey, next);
 }
 
-function buildManualScoreCard(phase, phaseNum, entry, savedChecks, isModerator) {
+function buildManualScoreCard(phase, phaseNum, entry, savedChecks, isModerator, myKeyOverride) {
   const mission = phase.missions[getBaseRole(entry.role)];
   if (!mission) return '';
   const keywords  = mission.keywords || [];
@@ -2125,8 +2139,9 @@ function buildManualScoreCard(phase, phaseNum, entry, savedChecks, isModerator) 
   const badgeText  = !hasScore ? '미채점' : `${score}점`;
   const barColor   = score >= 80 ? '#27ae60' : score >= 50 ? '#e6b800' : '#c0392b';
   const nameTag   = entry.isProxy ? ' (대리입력)' : '';
-  const meTag     = entry.key === getRKey() ? '<span style="font-size:11px;opacity:0.8;margin-left:4px;color:#aed6f1">(나)</span>' : '';
-  const isMe      = entry.key === getRKey();
+  const _myKey    = myKeyOverride || getRKey();
+  const meTag     = entry.key === _myKey ? '<span style="font-size:11px;opacity:0.8;margin-left:4px;color:#aed6f1">(나)</span>' : '';
+  const isMe      = entry.key === _myKey;
 
   // 비모더레이터: 해당 카드가 제출 전이면 "채점 중" 표시
   if (!isModerator && !isSubmitted) {
@@ -2354,6 +2369,12 @@ function startPhase(phaseNum, durationSeconds) {
   state.currentPhase = phaseNum; state.phaseStartTime = null;
   state.timerRunning = false; state.timerPaused = false; state.timerPausedRemaining = null;
   state.showingFeedback = false;
+  // 역할 이력 저장: 이 단계에서 각 참가자가 어떤 역할이었는지 기록
+  if (!state.roleHistory) state.roleHistory = {};
+  state.roleHistory[`phase${phaseNum}`] = {};
+  Object.entries(state.participants || {}).forEach(([name, info]) => {
+    state.roleHistory[`phase${phaseNum}`][name] = info.role;
+  });
   saveState(state); broadcast('PHASE_CHANGE', { phase: phaseNum }); renderExercise();
 }
 function changeDuration(delta) {
@@ -2571,27 +2592,40 @@ function renderFeedback() {
     <p>아래 각 역할별 작성 내용을 정답 키워드와 비교하여 누락된 항목을 확인하고, 우리 학교 상황에 맞게 보완할 점을 모더레이터 주도하에 함께 토의합니다.</p>
   </div>`;
 
-  ACTIVE_PHASES.forEach(phase => {
-    const phaseResponses = responses[`phase${phase.id}`] || {};
-    const phaseScores = (state.scores && state.scores[`phase${phase.id}`]) || {};
-    const isModerator = myRole === '모더레이터';
+  const isModerator = myRole === '모더레이터';
+  ACTIVE_PHASES.forEach((phase, idx) => {
+    const phaseKey = `phase${phase.id}`;
+    const phaseResponses = responses[phaseKey] || {};
+    const phaseScores = (state.scores && state.scores[phaseKey]) || {};
+    // 이 단계에서 현재 참가자가 가졌던 역할로 "나" 키 결정
+    const myPhaseRole = (!isModerator && state.roleHistory?.[phaseKey]?.[myName]) || myRole;
+    const myPhaseKey  = `${myPhaseRole}:${myName}`;
+    const sectionId   = `fb-phase-section-${phase.id}`;
+    // 1단계는 기본 펼침, 나머지는 접힘
+    const isOpen = idx === 0;
     html += `<div class="fb-phase-section">
-      <div class="fb-phase-title">
-        <span class="fb-phase-badge" style="background:${phase.color}">${phase.emoji} ${phase.id}단계</span>
-        ${phase.title}
-        <small style="color:var(--muted);font-weight:400;font-size:13px">${phase.date}</small>
+      <div class="fb-phase-title" style="cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between"
+           onclick="toggleFbSection('${sectionId}','${sectionId}-icon')">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span class="fb-phase-badge" style="background:${phase.color}">${phase.emoji} ${phase.id}단계</span>
+          <span>${phase.title}</span>
+          <small style="color:var(--muted);font-weight:400;font-size:13px">${phase.date}</small>
+        </div>
+        <span id="${sectionId}-icon" style="font-size:12px;color:var(--muted);margin-left:8px">${isOpen?'▲':'▼'}</span>
       </div>
-      <div class="fb-grid">
-        ${DISPLAY_ROLES.flatMap(role => {
-          const mission = phase.missions[getBaseRole(role)];
-          if (!mission) return [];
-          const participants = state.participants || {};
-          const entries = getRoleEntries(phaseResponses, participants, role);
-          return entries.map(e => {
-            const savedChecks = phaseScores[e.key] ?? null;
-            return buildManualScoreCard(phase, phase.id, {...e, role}, savedChecks, isModerator);
-          });
-        }).join('')}
+      <div id="${sectionId}" style="display:${isOpen?'block':'none'}">
+        <div class="fb-grid">
+          ${DISPLAY_ROLES.flatMap(role => {
+            const mission = phase.missions[getBaseRole(role)];
+            if (!mission) return [];
+            const participants = state.participants || {};
+            const entries = getRoleEntries(phaseResponses, participants, role);
+            return entries.map(e => {
+              const savedChecks = phaseScores[e.key] ?? null;
+              return buildManualScoreCard(phase, phase.id, {...e, role}, savedChecks, isModerator, myPhaseKey);
+            });
+          }).join('')}
+        </div>
       </div>
     </div>`;
   });
