@@ -561,6 +561,8 @@
     .ex-body { flex-direction: column; padding: 12px 14px; gap: 12px; }
     .scenario-panel { width: 100%; }
     .work-area { min-width: 0; }
+    /* 모더레이터: 컨트롤 패널을 모바일 최상단으로 */
+    .mod-right-panel { order: -1; }
 
     /* 미션 카드 */
     .mission-card .mission-header { font-size: 14px; }
@@ -629,6 +631,7 @@
 
     /* 훈련 본문 */
     .ex-body { padding: 10px 10px; gap: 10px; }
+    .mod-right-panel { order: -1; }
     .scenario-body { font-size: 13px; }
     .mission-card .mission-header { font-size: 13px; padding: 12px 14px 8px; }
     .mission-prompt { padding: 0 14px 10px; font-size: 13px; }
@@ -1840,7 +1843,7 @@ function renderPhase(body, state) {
     // 좌측: 시나리오 카드, 우측: 컨트롤 패널 + 참가자현황
     workHtml = `<div class="work-area">${scenarioCardHtml}</div>`;
     const modRightHtml = `
-      <div class="scenario-panel">
+      <div class="scenario-panel mod-right-panel">
         ${modControlPanelHtml}
         ${participantsCardHtml}
       </div>`;
