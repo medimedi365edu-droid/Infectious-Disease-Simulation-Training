@@ -529,6 +529,30 @@
     border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit;
   }
 
+  /* ── 비활성 역할 버튼 ── */
+  .role-btn.disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
+
+  /* ── 채점 키워드 태그 (관리자) ── */
+  .kw-admin-tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: #eaf2ff; color: var(--primary); border-radius: 4px;
+    padding: 3px 6px 3px 9px; margin: 2px; font-size: 12px; font-weight: 600;
+  }
+  .kw-admin-tag button {
+    background: none; border: none; cursor: pointer; color: var(--primary);
+    font-size: 14px; font-weight: 700; padding: 0 2px; line-height: 1;
+    opacity: 0.55; transition: opacity 0.15s;
+  }
+  .kw-admin-tag button:hover { opacity: 1; color: #c0392b; }
+  .kw-admin-wrap { display: flex; flex-wrap: wrap; align-items: center; min-height: 28px; padding: 4px; border: 2px solid var(--border); border-radius: 8px; background: white; margin-bottom: 6px; gap: 2px; }
+  .kw-admin-input {
+    flex: 1; min-width: 120px; padding: 5px 10px; border: 2px solid var(--border);
+    border-radius: 6px; font-size: 12px; font-family: inherit; outline: none; transition: border-color 0.2s;
+  }
+  .kw-admin-input:focus { border-color: var(--primary); }
+  .role-checkbox-group { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 12px; background: #f7f9fc; border: 1.5px solid var(--border); border-radius: 8px; margin-bottom: 12px; }
+  .role-checkbox-label { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; cursor: pointer; user-select: none; }
+
   /* ══════════════════════════════════════════
      RESPONSIVE — 태블릿 (768px 이하)
   ══════════════════════════════════════════ */
@@ -733,14 +757,32 @@
         <button class="role-btn" data-role="담임교사">
           <span class="role-icon">📚</span>담임교사
         </button>
-        <button class="role-btn" data-role="보건교사">
-          <span class="role-icon">🩺</span>보건교사
+        <button class="role-btn" data-role="보건(담당)교사">
+          <span class="role-icon">🩺</span>보건(담당)교사
+        </button>
+        <button class="role-btn" data-role="영양(교)사">
+          <span class="role-icon">🥗</span>영양(교)사
         </button>
         <button class="role-btn" data-role="행정실">
           <span class="role-icon">📋</span>행정실
         </button>
         <button class="role-btn" data-role="교장/교감">
           <span class="role-icon">🏛️</span>교장/교감
+        </button>
+        <button class="role-btn" data-role="교육(지원)청">
+          <span class="role-icon">🏢</span>교육(지원)청
+        </button>
+        <button class="role-btn" data-role="보건소">
+          <span class="role-icon">🏥</span>보건소
+        </button>
+        <button class="role-btn" data-role="시·군·구청">
+          <span class="role-icon">🏙️</span>시·군·구청
+        </button>
+        <button class="role-btn" data-role="도청">
+          <span class="role-icon">🗺️</span>도청
+        </button>
+        <button class="role-btn" data-role="식품의약품안전청">
+          <span class="role-icon">💊</span>식품의약품안전청
         </button>
       </div>
     </div>
@@ -836,36 +878,39 @@ const DEFAULT_SCENARIOS = [
     phases: [
       {
         id: 1, title: '유증상자 발견', emoji: '🛑', color: '#e67e22', colorClass: 'phase-1-color',
+        activeRoles: ['담임교사', '보건(담당)교사'],
         date: '3월 5일 (화)',
         situation: '1학년 6반 진한이가 수업 중 고열과 심한 기침, 가슴 통증을 호소합니다. 담임교사가 진한이의 안색이 매우 좋지 않고 발열이 의심됨을 발견했습니다.',
         duration: 300,
         missions: {
           '담임교사': { prompt: '진한이와 남은 반 학생들을 위해 당장 무엇을 해야 할까요?', answer: '① 즉시 보건교사에게 유선으로 연락합니다.\n② 진한이에게 마스크를 착용시키고, 2m 이상 거리를 유지하며 보건실까지 직접 동행합니다.\n③ 교실 창문을 모두 열어 충분히 환기시킵니다.\n④ 나머지 학생들에게도 마스크 착용을 지도합니다.', keywords: ['보건교사 유선 연락', '마스크 착용', '2m 거리', '보건실 동행', '교실 환기'] },
-          '보건교사': { prompt: '보건실로 온 진한이를 어떻게 조치할까요?', answer: '① 보건교사 본인도 마스크를 착용한 뒤 진한이의 체온과 증상을 확인합니다.\n② 인플루엔자 의심 시 일시적 관찰실(격리 공간)에서 보호자 도착 전까지 대기 조치합니다.\n③ 보호자에게 즉시 연락하여 조기 귀가 및 의료기관 진료를 안내합니다.', keywords: ['마스크 착용', '체온·증상 확인', '일시적 관찰실', '보호자 연락', '대기 조치'] },
+          '보건(담당)교사': { prompt: '보건실로 온 진한이를 어떻게 조치할까요?', answer: '① 보건교사 본인도 마스크를 착용한 뒤 진한이의 체온과 증상을 확인합니다.\n② 인플루엔자 의심 시 일시적 관찰실(격리 공간)에서 보호자 도착 전까지 대기 조치합니다.\n③ 보호자에게 즉시 연락하여 조기 귀가 및 의료기관 진료를 안내합니다.', keywords: ['마스크 착용', '체온·증상 확인', '일시적 관찰실', '보호자 연락', '대기 조치'] },
           '행정실': { prompt: '감염 확산 방지를 위한 지원 조치는 무엇인가요?', answer: '① 담임교사 및 보건교사의 요청에 따라 1학년 6반 교실의 환기와 소독을 신속히 지원합니다.\n② 보건교사가 사용하는 일시적 관찰실의 환기 및 소독 물품(소독제, 장갑, 마스크)을 준비·지원합니다.', keywords: ['교실 환기', '일시적 관찰실', '소독 지원', '소독 물품 준비'] },
           '교장/교감': { prompt: '이 단계에서 교장/교감의 역할은 무엇인가요?', answer: '① 담임교사 및 보건교사로부터 유증상자 발생 보고를 받고 현황을 파악합니다.\n② 담당 교직원들이 초기 조치를 원활히 수행할 수 있도록 지원하고 지시합니다.\n③ 추가 유증상자 발생 여부를 주시하며 다음 단계 조치를 준비합니다.', keywords: ['현황 파악', '초기 조치 지원', '추가 유증상자 모니터링'] }
         }
       },
       {
         id: 2, title: '확진자 발생 및 능동감시', emoji: '🚨', color: '#c0392b', colorClass: 'phase-2-color',
+        activeRoles: ['담임교사', '보건(담당)교사', '교장/교감'],
         date: '3월 6일 (수)',
         situation: '진한이 보호자로부터 "어제 병원에서 인플루엔자 확진 판정을 받았다"는 연락이 왔습니다. 담임교사는 이 사실을 보건교사와 학교장에게 즉시 보고했습니다.',
         duration: 300,
         missions: {
           '담임교사': { prompt: '진한이의 출결 처리와 1학년 학생들 관리는 어떻게 할까요?', answer: '① 진한이에게 증상이 완전히 안정될 때까지 등교 중지를 안내합니다.\n② 1학년 전체 학생을 대상으로 매일 1회 이상 결석·조퇴 사유를 확인하여 능동감시를 실시합니다.\n③ 발열 또는 호흡기 증상을 보이는 학생은 즉시 보건교사에게 연락합니다.', keywords: ['등교 중지 안내', '1학년 능동감시', '매일 결석·조퇴 확인', '증상 보고'] },
-          '보건교사': { prompt: '행정 보고 및 추가 확산 방지 대책은 무엇인가요?', answer: '① 학교장에게 확진 발생 사실을 즉시 보고합니다.\n② 나이스(NEIS)를 통해 교육지원청에 보고합니다.\n③ 능동감시 대상(1학년 6반 접촉자)을 파악하고 목록을 작성합니다.\n④ 합병증 고위험군 학생을 별도로 확인합니다.', keywords: ['학교장 보고', 'NEIS 보고', '교육지원청 보고', '능동감시 대상 파악', '합병증 고위험군 확인'] },
+          '보건(담당)교사': { prompt: '행정 보고 및 추가 확산 방지 대책은 무엇인가요?', answer: '① 학교장에게 확진 발생 사실을 즉시 보고합니다.\n② 나이스(NEIS)를 통해 교육지원청에 보고합니다.\n③ 능동감시 대상(1학년 6반 접촉자)을 파악하고 목록을 작성합니다.\n④ 합병증 고위험군 학생을 별도로 확인합니다.', keywords: ['학교장 보고', 'NEIS 보고', '교육지원청 보고', '능동감시 대상 파악', '합병증 고위험군 확인'] },
           '행정실': { prompt: '확진자 발생 후 행정적 지원 사항은 무엇인가요?', answer: '① 보건교사의 요청에 따라 능동감시 안내문 발송 등 행정 지원을 제공합니다.\n② 소독 물품 재고를 확인하고 추가 구매를 검토합니다.\n③ 방역 관련 소모품 배부 및 학교 내 소독 일정을 협의합니다.', keywords: ['능동감시 안내문 지원', '소독 물품 재고 확인', '방역 소모품 배부'] },
           '교장/교감': { prompt: '학교 차원의 지시 사항은 무엇인가요?', answer: '① 발생감시팀(보건교사 주도)에게 추가 환자 파악을 위한 능동감시를 공식 지시합니다.\n② 1학년 전체 담임교사에게 매일 유증상자 현황을 보고하도록 지시합니다.\n③ 학교 홈페이지 또는 가정통신문을 통해 인플루엔자 예방수칙을 안내합니다.', keywords: ['능동감시 지시', '담임교사 현황 보고 지시', '가정통신문 발송', '예방수칙 안내'] }
         }
       },
       {
         id: 3, title: '교내 집단 유행 발생', emoji: '💥', color: '#8e44ad', colorClass: 'phase-3-color',
+        activeRoles: ['담임교사', '보건(담당)교사', '행정실', '교장/교감'],
         date: '3월 7일 (목)',
         situation: '능동감시 결과, 1학년 6반 5명을 포함해 다른 반과 도서관 이용자 등 총 20명의 인플루엔자 의심 환자가 무더기로 발생했습니다. 일부 학생은 고열로 조퇴하였고, 교내 확산이 우려됩니다.',
         duration: 300,
         missions: {
           '담임교사': { prompt: '다수의 유증상자 발생에 따른 행정 처리와 생활지도는?', answer: '① 나이스(NEIS)에 감염병 환자로 등록하고 출결을 처리합니다.\n② 추가로 의심 증상을 보이는 학생들에게 즉시 의료기관 진료를 안내합니다.\n③ 재원 중인 학생들에게 마스크 착용 및 손씻기 등 개인 예방수칙을 지도합니다.\n④ 결석 학생의 가정과 연락하여 증상 경과를 파악합니다.', keywords: ['NEIS 감염병 환자 등록', '의료기관 진료 안내', '마스크 착용 지도', '결석 학생 생활지도'] },
-          '보건교사': { prompt: '유행 상황 모니터링 방안은 무엇인가요?', answer: '① 유행 의심 상황을 학교장 및 교육(지원)청에 즉시 보고합니다.\n② 매일 환자 수, 완치자 수, 재원 감시 대상자 수를 집계하여 현황표를 작성합니다.\n③ 합병증 고위험군이 유증상자 접촉 시 즉시 의료기관 진료를 받도록 요청합니다.\n④ 관할 보건소와 연락하여 역학조사 협조를 요청합니다.', keywords: ['학교장·교육청 보고', '일일 환자 현황 집계', '고위험군 즉시 진료 요청', '보건소 역학조사 협조'] },
+          '보건(담당)교사': { prompt: '유행 상황 모니터링 방안은 무엇인가요?', answer: '① 유행 의심 상황을 학교장 및 교육(지원)청에 즉시 보고합니다.\n② 매일 환자 수, 완치자 수, 재원 감시 대상자 수를 집계하여 현황표를 작성합니다.\n③ 합병증 고위험군이 유증상자 접촉 시 즉시 의료기관 진료를 받도록 요청합니다.\n④ 관할 보건소와 연락하여 역학조사 협조를 요청합니다.', keywords: ['학교장·교육청 보고', '일일 환자 현황 집계', '고위험군 즉시 진료 요청', '보건소 역학조사 협조'] },
           '행정실': { prompt: '확산 방지를 위한 학교 전체 방역 계획은?', answer: '① 책상, 문손잡이, 계단 난간 등 오염 가능성이 높은 표면을 집중 닦기 및 소독합니다.\n② 화장실, 급식실, 도서관 등 공용 공간에 대한 전체 시설 소독을 실시합니다.\n③ 소독 일정 및 담당자를 지정하고 소독 완료 현황을 관리합니다.', keywords: ['오염 표면 집중 닦기', '공용 공간 전체 소독', '소독 일정 관리', '문손잡이·계단 소독'] },
           '교장/교감': { prompt: '학사 운영 및 행정 결단은 무엇인가요?', answer: '① 관할 보건소장에게 집단 유행 발생을 신고합니다.\n② 상황에 따라 단축수업 또는 자체 휴업 실시를 검토합니다.\n③ 수학여행, 체험학습, 체육대회 등 단체 활동의 제한 또는 연기 여부를 검토합니다.\n④ 교육청과 협의하여 추가 조치 사항을 결정합니다.', keywords: ['보건소장 신고', '단축수업 검토', '자체 휴업 검토', '단체 활동 제한 검토', '교육청 협의'] }
         }
@@ -886,7 +931,7 @@ const DEFAULT_SCENARIOS = [
         duration: 300,
         missions: {
           '담임교사': { prompt: '수포성 발진이 발견된 이수진과 반 학생들을 어떻게 조치할까요?', answer: '① 즉시 보건교사에게 연락하고 이수진을 교실 밖으로 분리합니다.\n② 이수진에게 마스크를 착용시키고 보건실로 동행합니다.\n③ 이수진이 앉던 자리 주변 학생들에게 손씻기 및 발진 증상 관찰을 안내합니다.\n④ 교실 창문을 열어 충분히 환기시킵니다.', keywords: ['보건교사 연락', '학생 분리', '마스크 착용', '보건실 동행', '교실 환기', '손씻기 안내'] },
-          '보건교사': { prompt: '보건실로 온 이수진을 어떻게 조치하나요?', answer: '① 보건교사 본인도 마스크와 장갑을 착용한 후 이수진의 발진 부위와 증상을 확인합니다.\n② 수두 의심 시 즉시 격리실(관찰실)에 대기시키고 다른 학생들과 접촉을 차단합니다.\n③ 보호자에게 즉시 연락하여 귀가 및 소아청소년과 진료를 안내합니다.\n④ 예방접종 미완료 여부를 확인합니다.', keywords: ['마스크·장갑 착용', '발진 증상 확인', '격리실 대기', '보호자 연락', '의료기관 진료', '예방접종 확인'] },
+          '보건(담당)교사': { prompt: '보건실로 온 이수진을 어떻게 조치하나요?', answer: '① 보건교사 본인도 마스크와 장갑을 착용한 후 이수진의 발진 부위와 증상을 확인합니다.\n② 수두 의심 시 즉시 격리실(관찰실)에 대기시키고 다른 학생들과 접촉을 차단합니다.\n③ 보호자에게 즉시 연락하여 귀가 및 소아청소년과 진료를 안내합니다.\n④ 예방접종 미완료 여부를 확인합니다.', keywords: ['마스크·장갑 착용', '발진 증상 확인', '격리실 대기', '보호자 연락', '의료기관 진료', '예방접종 확인'] },
           '행정실': { prompt: '수두 의심 환자 발생 시 행정 지원은?', answer: '① 보건교사 요청에 따라 관찰실(격리 공간) 환기 및 소독 물품을 즉시 준비합니다.\n② 2학년 3반 교실 소독을 지원하고 소독 용품(소독제, 일회용 장갑 등)을 공급합니다.\n③ 학교 내 소독 실시 현황을 기록합니다.', keywords: ['관찰실 소독 준비', '교실 소독 지원', '소독 물품 공급', '소독 현황 기록'] },
           '교장/교감': { prompt: '수두 의심 사례 발생 시 관리자의 역할은?', answer: '① 보건교사로부터 수두 의심 보고를 받고 현황을 파악합니다.\n② 보건교사와 담임교사가 초기 조치를 원활히 수행할 수 있도록 지원합니다.\n③ 수두 예방접종 미완료 학생 현황을 파악하도록 보건교사에게 지시합니다.\n④ 추가 유증상자 발생 여부를 모니터링하도록 지시합니다.', keywords: ['보고 수령 및 현황 파악', '초기 조치 지원', '미접종 학생 현황 파악 지시', '추가 유증상자 모니터링'] }
         }
@@ -898,7 +943,7 @@ const DEFAULT_SCENARIOS = [
         duration: 300,
         missions: {
           '담임교사': { prompt: '수두 확진 후 반 학생들 관리와 출결 처리는?', answer: '① 이수진에게 모든 수포에 딱지가 앉을 때까지 등교 중지(완치 후 복귀)를 안내합니다.\n② 2학년 3반 전체 학생을 대상으로 매일 발진·발열 증상 여부를 확인합니다.\n③ 수두 예방접종력이 없는 학생은 즉시 보호자에게 연락하여 의료기관 상담을 안내합니다.\n④ 학생들에게 가려운 부위를 손으로 긁지 않도록 지도합니다.', keywords: ['등교 중지 안내', '매일 증상 확인', '미접종 학생 보호자 연락', '긁지 않도록 지도'] },
-          '보건교사': { prompt: '수두 확진에 따른 행정 보고와 접촉자 관리는?', answer: '① 수두는 2급 감염병으로 관할 보건소에 즉시 신고합니다.\n② 나이스(NEIS)를 통해 교육지원청에 감염병 발생을 보고합니다.\n③ 2학년 3반 및 이수진과 접촉한 학생 명단을 작성하고 증상 모니터링을 실시합니다.\n④ 수두 예방접종 미완료 학생을 파악하여 예방접종 권고 및 등교 여부를 검토합니다.\n⑤ 가정통신문을 통해 수두 발생 사실 및 예방수칙을 안내합니다.', keywords: ['보건소 신고', 'NEIS 보고', '접촉자 명단 작성', '미접종 학생 파악', '가정통신문 발송'] },
+          '보건(담당)교사': { prompt: '수두 확진에 따른 행정 보고와 접촉자 관리는?', answer: '① 수두는 2급 감염병으로 관할 보건소에 즉시 신고합니다.\n② 나이스(NEIS)를 통해 교육지원청에 감염병 발생을 보고합니다.\n③ 2학년 3반 및 이수진과 접촉한 학생 명단을 작성하고 증상 모니터링을 실시합니다.\n④ 수두 예방접종 미완료 학생을 파악하여 예방접종 권고 및 등교 여부를 검토합니다.\n⑤ 가정통신문을 통해 수두 발생 사실 및 예방수칙을 안내합니다.', keywords: ['보건소 신고', 'NEIS 보고', '접촉자 명단 작성', '미접종 학생 파악', '가정통신문 발송'] },
           '행정실': { prompt: '수두 확진 후 행정적 지원 및 방역 조치는?', answer: '① 보건교사 요청에 따라 가정통신문 인쇄 및 배부를 지원합니다.\n② 교실 및 공용 공간(화장실, 복도 등)에 대한 정기 소독을 실시합니다.\n③ 소독 물품 재고를 확인하고 부족 시 즉시 구매 요청합니다.', keywords: ['가정통신문 지원', '공용 공간 정기 소독', '소독 물품 재고 확인'] },
           '교장/교감': { prompt: '2급 감염병 발생 시 학교 차원의 지시 사항은?', answer: '① 보건소 신고 및 교육청 보고가 신속히 이루어지도록 지원합니다.\n② 수두 예방접종 미완료 학생에 대한 전교 현황 파악을 지시합니다.\n③ 학교 홈페이지에 수두 발생 관련 예방수칙 공지를 게시합니다.\n④ 학교 내 집단감염 예방을 위한 환경 소독 강화를 지시합니다.', keywords: ['보건소 신고 지원', '전교 미접종 현황 파악', '홈페이지 공지', '환경 소독 강화 지시'] }
         }
@@ -910,7 +955,7 @@ const DEFAULT_SCENARIOS = [
         duration: 300,
         missions: {
           '담임교사': { prompt: '집단 유행 상황에서 학급 관리와 학생 지도는?', answer: '① NEIS에 추가 감염병 환자를 등록하고 출결을 처리합니다.\n② 발진·발열 증상 학생은 즉시 귀가 조치하고 의료기관 진료를 안내합니다.\n③ 수포 분비물이 묻은 물건(교과서, 문구 등)의 공유를 금지합니다.\n④ 잔류 학생들의 손씻기 및 개인위생 수칙을 철저히 지도합니다.', keywords: ['NEIS 환자 등록', '귀가 조치 및 진료 안내', '물건 공유 금지', '개인위생 지도'] },
-          '보건교사': { prompt: '집단 유행 시 모니터링 및 보건소 협조 방안은?', answer: '① 역학조사관에게 접촉자 명단, 예방접종력, 발병 일시 등 역학정보를 제공합니다.\n② 매일 신규 환자 수, 완치·복귀 현황을 집계하여 교육청에 보고합니다.\n③ 집단 접촉이 이루어진 공간(교실, 급식실 등)에 대한 집중 소독을 요청합니다.\n④ 수두 예방접종 미완료 학생에게 즉시 접종받도록 강력히 권고합니다.', keywords: ['역학정보 제공', '일일 환자 현황 보고', '집중 소독 요청', '즉시 예방접종 권고'] },
+          '보건(담당)교사': { prompt: '집단 유행 시 모니터링 및 보건소 협조 방안은?', answer: '① 역학조사관에게 접촉자 명단, 예방접종력, 발병 일시 등 역학정보를 제공합니다.\n② 매일 신규 환자 수, 완치·복귀 현황을 집계하여 교육청에 보고합니다.\n③ 집단 접촉이 이루어진 공간(교실, 급식실 등)에 대한 집중 소독을 요청합니다.\n④ 수두 예방접종 미완료 학생에게 즉시 접종받도록 강력히 권고합니다.', keywords: ['역학정보 제공', '일일 환자 현황 보고', '집중 소독 요청', '즉시 예방접종 권고'] },
           '행정실': { prompt: '집단 유행에 따른 전교 방역 강화 계획은?', answer: '① 교실, 화장실, 급식실, 도서관 등 전 시설에 대한 집중 소독을 실시합니다.\n② 소독 담당자를 지정하고 매일 소독 일지를 작성합니다.\n③ 역학조사관 방문을 위한 학교 자료(소독 일지, 시설 현황 등)를 준비합니다.\n④ 학교 내 손소독제를 각 교실 및 공용 공간에 추가 배치합니다.', keywords: ['전 시설 집중 소독', '소독 일지 작성', '역학조사 자료 준비', '손소독제 추가 배치'] },
           '교장/교감': { prompt: '집단 유행 시 학사 운영 결단과 외부 대응은?', answer: '① 보건소장에게 집단 수두 발생을 정식 신고하고 역학조사에 적극 협조합니다.\n② 유행 규모에 따라 단축수업, 학급 분리, 임시 휴업 등을 검토합니다.\n③ 체육대회, 수학여행 등 단체 활동을 일시 중단 또는 연기합니다.\n④ 학부모 대상 긴급 가정통신문을 발송하고 필요 시 학부모 설명회를 개최합니다.\n⑤ 교육청과 지속 협의하여 학교 운영 방향을 결정합니다.', keywords: ['보건소 신고 및 역학조사 협조', '단축수업·휴업 검토', '단체 활동 중단', '학부모 긴급 통신문', '교육청 협의'] }
         }
@@ -931,7 +976,7 @@ const DEFAULT_SCENARIOS = [
         duration: 300,
         missions: {
           '담임교사': { prompt: '결핵 의심 증상 학생 발견 시 즉각적인 조치는?', answer: '① 박민준에게 즉시 마스크를 착용시키고 보건교사에게 연락합니다.\n② 박민준을 보건실로 동행하여 보건교사의 초기 상담을 받도록 합니다.\n③ 반 학생들에게 증상에 대해 공개하지 않고, 조용히 분리 조치합니다.\n④ 박민준과 최근 밀접 접촉한 학생 현황을 비공개로 파악합니다.', keywords: ['마스크 착용', '보건교사 연락', '보건실 동행', '비공개 분리', '밀접 접촉자 파악'] },
-          '보건교사': { prompt: '결핵 의심 학생에 대한 초기 조치와 안내는?', answer: '① 박민준의 증상(기침 기간, 발열, 체중 변화 등)을 상세히 파악합니다.\n② 보건교사 본인도 KF94 마스크를 착용하고 접촉을 최소화합니다.\n③ 보호자에게 즉시 연락하여 결핵 의심 증상을 설명하고 당일 결핵 전문 의료기관(보건소 또는 병원) 진료를 강력히 권고합니다.\n④ 박민준을 다른 학생들과 분리된 공간(환기되는 별도 공간)에 대기시킵니다.', keywords: ['증상 상세 파악', 'KF94 마스크 착용', '보호자 연락', '결핵 전문기관 진료 권고', '분리 대기'] },
+          '보건(담당)교사': { prompt: '결핵 의심 학생에 대한 초기 조치와 안내는?', answer: '① 박민준의 증상(기침 기간, 발열, 체중 변화 등)을 상세히 파악합니다.\n② 보건교사 본인도 KF94 마스크를 착용하고 접촉을 최소화합니다.\n③ 보호자에게 즉시 연락하여 결핵 의심 증상을 설명하고 당일 결핵 전문 의료기관(보건소 또는 병원) 진료를 강력히 권고합니다.\n④ 박민준을 다른 학생들과 분리된 공간(환기되는 별도 공간)에 대기시킵니다.', keywords: ['증상 상세 파악', 'KF94 마스크 착용', '보호자 연락', '결핵 전문기관 진료 권고', '분리 대기'] },
           '행정실': { prompt: '결핵 의심 환자 발생 시 행정 지원은?', answer: '① 보건교사 요청에 따라 환기가 잘 되는 별도 대기 공간을 마련합니다.\n② 해당 교실 및 공용 공간에 대한 환기를 즉시 강화합니다.\n③ 방역 소모품(마스크, 소독제, 장갑 등) 재고를 확인하고 보건교사에게 제공합니다.', keywords: ['별도 대기 공간 마련', '환기 강화', '방역 소모품 제공'] },
           '교장/교감': { prompt: '결핵 의심 사례 발생 시 관리자 역할은?', answer: '① 보건교사로부터 결핵 의심 학생 발생 보고를 받고 현황을 파악합니다.\n② 학생 개인정보 보호를 위해 관련 정보의 비공개 원칙을 교직원에게 안내합니다.\n③ 보건교사가 신속히 조치할 수 있도록 지원하고 의료기관 진료 결과를 보고받을 준비를 합니다.\n④ 진단 결과에 따라 추가 조치를 준비합니다.', keywords: ['현황 파악', '개인정보 비공개 원칙', '보건교사 지원', '진단 결과 보고 대기'] }
         }
@@ -943,7 +988,7 @@ const DEFAULT_SCENARIOS = [
         duration: 300,
         missions: {
           '담임교사': { prompt: '결핵 확진 후 학급 내 접촉자 관리는?', answer: '① 박민준에게 결핵 치료 완료 및 보건소의 등교 허가 시까지 등교 중지를 안내합니다.\n② 보건교사와 협력하여 3학년 2반 전체 학생의 접촉자 명단을 작성합니다.\n③ 학생 개인정보 보호를 철저히 하면서 흉부 X선 검사 안내 가정통신문을 배부합니다.\n④ 학부모에게 결핵에 대한 과도한 공포심을 유발하지 않도록 안내합니다.', keywords: ['등교 중지 안내', '접촉자 명단 작성', '가정통신문 배부', '개인정보 보호', '과도한 공포 예방'] },
-          '보건교사': { prompt: '결핵 확진에 따른 법정 보고와 역학조사 협조는?', answer: '① 결핵은 3급 감염병으로 관할 보건소에 즉시 신고합니다(확인 후 24시간 내).\n② 나이스(NEIS)를 통해 교육지원청에 결핵 확진 발생을 보고합니다.\n③ 보건소 역학조사관에게 접촉자 명단(동일 교실, 동아리, 방과후 활동 등)을 제공합니다.\n④ 접촉자 흉부 X선 검사 일정을 조율하고 검사 안내문을 작성합니다.\n⑤ IGRA(인터페론 감마 검사) 또는 투베르쿨린 검사 안내를 준비합니다.', keywords: ['보건소 신고', 'NEIS 보고', '접촉자 명단 제공', '흉부 X선 검사 조율', 'IGRA 검사 안내'] },
+          '보건(담당)교사': { prompt: '결핵 확진에 따른 법정 보고와 역학조사 협조는?', answer: '① 결핵은 3급 감염병으로 관할 보건소에 즉시 신고합니다(확인 후 24시간 내).\n② 나이스(NEIS)를 통해 교육지원청에 결핵 확진 발생을 보고합니다.\n③ 보건소 역학조사관에게 접촉자 명단(동일 교실, 동아리, 방과후 활동 등)을 제공합니다.\n④ 접촉자 흉부 X선 검사 일정을 조율하고 검사 안내문을 작성합니다.\n⑤ IGRA(인터페론 감마 검사) 또는 투베르쿨린 검사 안내를 준비합니다.', keywords: ['보건소 신고', 'NEIS 보고', '접촉자 명단 제공', '흉부 X선 검사 조율', 'IGRA 검사 안내'] },
           '행정실': { prompt: '결핵 확진 후 학교 내 환경 관리는?', answer: '① 박민준이 주로 생활한 교실, 도서관, 급식실 등에 대한 철저한 환기를 실시합니다.\n② 자연 환기가 어려운 공간은 기계 환기 장치를 가동하고 환기 시간을 늘립니다.\n③ 역학조사 결과에 따라 추가 소독이 필요한 공간을 지정하여 소독합니다.\n④ 가정통신문 인쇄·배부 및 관련 행정 처리를 지원합니다.', keywords: ['철저한 환기 실시', '기계 환기 가동', '지정 공간 소독', '행정 처리 지원'] },
           '교장/교감': { prompt: '결핵 확진에 따른 학교 차원의 대응은?', answer: '① 보건소의 역학조사에 전면 협조하고 필요한 자료를 신속히 제공합니다.\n② 교직원 및 학생들의 과도한 불안을 예방하기 위해 정확한 정보를 제공합니다.\n③ 결핵 접촉자 전원의 흉부 X선 검사가 이루어지도록 학교 차원에서 안내합니다.\n④ 교육청에 상황을 보고하고 추가 지원 방안을 협의합니다.', keywords: ['역학조사 전면 협조', '정확한 정보 제공', '전원 흉부 X선 검사 안내', '교육청 보고 및 협의'] }
         }
@@ -955,7 +1000,7 @@ const DEFAULT_SCENARIOS = [
         duration: 300,
         missions: {
           '담임교사': { prompt: '잠복 결핵 감염자 추가 발견 시 학급 관리는?', answer: '① 잠복 결핵 감염자에게는 즉시 감염은 아니지만 예방적 치료의 중요성을 설명합니다.\n② 보건교사와 협력하여 추가 검사 대상 학생의 명단을 갱신합니다.\n③ 학생들이 결핵에 대해 올바르게 이해할 수 있도록 기초 정보를 제공합니다.\n④ 결석·조퇴 학생의 상황을 지속 모니터링하고 보건교사에게 보고합니다.', keywords: ['잠복 결핵 설명', '추가 검사 명단 갱신', '결핵 기초 정보 제공', '상황 지속 모니터링'] },
-          '보건교사': { prompt: '집단감염 우려 상황에서의 보건 대응은?', answer: '① 보건소 역학조사관과 긴밀히 협력하여 추가 접촉자를 파악합니다.\n② 전교생 및 교직원 대상 흉부 X선 검사 일정을 학교와 보건소가 공동으로 조율합니다.\n③ 잠복 결핵 감염자에게 예방적 치료(잠복 결핵 치료) 의의와 방법을 안내합니다.\n④ 매일 신규 의심 증상자 현황을 집계하여 교장과 교육청에 보고합니다.\n⑤ 학교 전체 환기 실태를 점검하고 개선이 필요한 공간을 보고합니다.', keywords: ['역학조사관 협력', '전교생 검사 조율', '잠복 결핵 치료 안내', '일일 현황 보고', '환기 실태 점검'] },
+          '보건(담당)교사': { prompt: '집단감염 우려 상황에서의 보건 대응은?', answer: '① 보건소 역학조사관과 긴밀히 협력하여 추가 접촉자를 파악합니다.\n② 전교생 및 교직원 대상 흉부 X선 검사 일정을 학교와 보건소가 공동으로 조율합니다.\n③ 잠복 결핵 감염자에게 예방적 치료(잠복 결핵 치료) 의의와 방법을 안내합니다.\n④ 매일 신규 의심 증상자 현황을 집계하여 교장과 교육청에 보고합니다.\n⑤ 학교 전체 환기 실태를 점검하고 개선이 필요한 공간을 보고합니다.', keywords: ['역학조사관 협력', '전교생 검사 조율', '잠복 결핵 치료 안내', '일일 현황 보고', '환기 실태 점검'] },
           '행정실': { prompt: '집단 감염 우려 시 학교 환경 관리 강화는?', answer: '① 전교 흉부 X선 검사를 위한 학교 내 검사 장소 및 동선을 준비합니다.\n② 모든 교실과 공용 공간에 대해 정기 소독 주기를 단축하고 집중 환기를 실시합니다.\n③ 교직원 대상으로도 결핵 관련 예방 물품(마스크 등)을 배포합니다.\n④ 역학조사 관련 행정 서류 및 현황 자료를 신속히 준비·제출합니다.', keywords: ['검사 장소 준비', '소독 주기 단축', '교직원 예방 물품 배포', '행정 서류 준비'] },
           '교장/교감': { prompt: '학교 차원의 위기 대응과 학사 운영 결단은?', answer: '① 보건소장에게 집단 결핵 발생을 공식 보고하고 역학조사에 계속 협조합니다.\n② 교육청과 협의하여 학교 운영 방향(단축수업, 임시 휴업 등)을 결정합니다.\n③ 단체 활동(수학여행, 체육대회 등)을 일시 중단하여 집단 접촉 기회를 최소화합니다.\n④ 학부모에게 상황을 투명하게 설명하는 안내문을 발송하고, 필요 시 설명회를 개최합니다.\n⑤ 결핵 검진 결과 양성 학생에 대한 개인정보 보호와 학교생활 정상화 방안을 마련합니다.', keywords: ['보건소 공식 보고', '교육청 협의 및 학사 결정', '단체 활동 중단', '학부모 안내문 발송', '개인정보 보호 방안'] }
         }
@@ -1006,10 +1051,25 @@ function renderAdminGroupCount() {
 }
 
 const ROLE_ICONS = {
-  '모더레이터': '🎙️', '담임교사': '📚', '보건교사': '🩺', '행정실': '📋', '교장/교감': '🏛️'
+  '모더레이터': '🎙️', '담임교사': '📚', '보건(담당)교사': '🩺', '영양(교)사': '🥗',
+  '행정실': '📋', '교장/교감': '🏛️', '교육(지원)청': '🏢',
+  '보건소': '🏥', '시·군·구청': '🏙️', '도청': '🗺️', '식품의약품안전청': '💊'
 };
-const DISPLAY_ROLES = ['담임교사', '보건교사', '행정실', '교장/교감'];
-const PARTICIPANT_ROLES = ['모더레이터', '담임교사', '보건교사', '행정실', '교장/교감'];
+const ALL_ROLES = ['담임교사', '보건(담당)교사', '영양(교)사', '행정실', '교장/교감', '교육(지원)청', '보건소', '시·군·구청', '도청', '식품의약품안전청'];
+const DISPLAY_ROLES = ['담임교사', '보건(담당)교사', '영양(교)사', '행정실', '교장/교감', '교육(지원)청', '보건소', '시·군·구청', '도청', '식품의약품안전청'];
+const PARTICIPANT_ROLES = ['모더레이터', '담임교사', '보건(담당)교사', '영양(교)사', '행정실', '교장/교감', '교육(지원)청', '보건소', '시·군·구청', '도청', '식품의약품안전청'];
+
+// 단계의 활성 역할 반환 (activeRoles 없으면 missions 키 전체를 기본값으로 사용)
+function getActiveRoles(phase) {
+  return phase.activeRoles ?? Object.keys(phase.missions);
+}
+// 시나리오 전 단계에서 한 번이라도 활성화된 역할 집합 반환
+function getRolesUsedInScenario(scenario) {
+  const used = new Set();
+  scenario.phases.forEach(p => getActiveRoles(p).forEach(r => used.add(r)));
+  return used;
+}
+
 function getBaseRole(role) { return role; }
 // 개인 응답 키: "역할:이름"
 function getRKey() { return `${myRole}:${myName}`; }
@@ -1086,6 +1146,13 @@ function selectScenario(id) {
   document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('selected'));
   document.getElementById('input-name').value = '';
   document.getElementById('btn-join').disabled = true;
+
+  // 시나리오에서 한 번도 활성화되지 않는 역할 버튼 비활성화
+  const usedRoles = getRolesUsedInScenario(sc);
+  document.querySelectorAll('.role-btn:not(.moderator-btn)').forEach(btn => {
+    const role = btn.dataset.role;
+    if (role) btn.classList.toggle('disabled', !usedRoles.has(role));
+  });
 
   document.getElementById('screen-home').style.display = 'none';
   document.getElementById('screen-login').style.display = 'flex';
@@ -1854,6 +1921,16 @@ function renderPhase(body, state) {
     body.classList.remove('mod-exercise');
     body.innerHTML = workHtml + modRightHtml;
     // 이후 proxy/feedback 삽입은 공통 로직에서 처리
+  } else if (!getActiveRoles(phase).includes(myRole)) {
+    workHtml = `
+      <div class="work-area">
+        <div class="no-mission-notice">
+          <p style="font-size:32px;margin-bottom:12px">⏸</p>
+          <p style="font-size:16px;font-weight:700;color:var(--primary);margin-bottom:8px">이번 단계는 ${myRole}의 참여 단계가 아닙니다</p>
+          <p style="font-size:14px;line-height:1.7">이번 단계는 대기하면서 다른 역할의 진행 상황을 확인하세요.</p>
+        </div>
+        <div class="responses-grid">${renderAllRoleCards(phase, phaseResponses, getRKey(), state.participants||{})}</div>
+      </div>`;
   } else if (!myMission) {
     workHtml = `
       <div class="work-area">
@@ -1929,7 +2006,12 @@ function renderPhase(body, state) {
 
 // ── PROXY SECTION ──
 function renderProxySection(phase, phaseResponses, participants) {
-  const missingRoles = DISPLAY_ROLES.filter(r => !Object.values(participants).some(p => p.role === r));
+  const activeRoles = getActiveRoles(phase);
+  const missingRoles = activeRoles.filter(r =>
+    r !== '모더레이터' &&
+    phase.missions[r] &&
+    !Object.values(participants).some(p => p.role === r)
+  );
   if (!missingRoles.length) return '';
 
   const items = missingRoles.map(role => {
@@ -2234,7 +2316,7 @@ function buildInlineFeedbackHtml(phase, phaseResponses, participants) {
   const phaseScores = (state.scores && state.scores[`phase${phaseNum}`]) || {};
   const isModerator = myRole === '모더레이터';
 
-  const cards = DISPLAY_ROLES.flatMap(role => {
+  const cards = getActiveRoles(phase).filter(r => r !== '모더레이터').flatMap(role => {
     const mission = phase.missions[getBaseRole(role)];
     if (!mission) return [];
     const entries = getRoleEntries(phaseResponses, participants, role);
@@ -2259,7 +2341,7 @@ function renderPhaseFeedback(body, state) {
   const isModerator = myRole === '모더레이터';
   const participants = state.participants || {};
 
-  const cards = DISPLAY_ROLES.flatMap(role => {
+  const cards = getActiveRoles(phase).filter(r => r !== '모더레이터').flatMap(role => {
     const mission = phase.missions[getBaseRole(role)];
     if (!mission) return [];
     const entries = getRoleEntries(phaseResponses, participants, role);
@@ -2333,7 +2415,8 @@ function renderParticipantsList(state, phaseNum) {
 
 function renderAllRoleCards(phase, phaseResponses, excludeKey, participants) {
   participants = participants || {};
-  return DISPLAY_ROLES.flatMap(role => {
+  const activeRoles = getActiveRoles(phase).filter(r => r !== '모더레이터');
+  return activeRoles.flatMap(role => {
     const entries = getRoleEntries(phaseResponses, participants, role);
     return entries.map(e => {
       if (e.key === excludeKey) return '';
@@ -2620,7 +2703,7 @@ function renderFeedback() {
       </div>
       <div id="${sectionId}" style="display:${isOpen?'block':'none'}">
         <div class="fb-grid">
-          ${DISPLAY_ROLES.flatMap(role => {
+          ${getActiveRoles(phase).filter(r => r !== '모더레이터').flatMap(role => {
             const mission = phase.missions[getBaseRole(role)];
             if (!mission) return [];
             const participants = state.participants || {};
@@ -2659,6 +2742,32 @@ function resetAll() {
 //  ADMIN PANEL
 // ═══════════════════════════════════════════════════════
 let adminSelectedScenarioIndex = -1;
+let adminKeywordState = {}; // { 'p0_담임교사': ['kw1', ...], ... }
+
+function addKeyword(kwKey) {
+  const input = document.getElementById(`kw-input-${kwKey}`);
+  if (!input) return;
+  const val = input.value.trim();
+  if (!val) return;
+  if (!adminKeywordState[kwKey]) adminKeywordState[kwKey] = [];
+  adminKeywordState[kwKey].push(val);
+  input.value = '';
+  refreshKeywordTags(kwKey);
+}
+
+function removeKeyword(kwKey, ki) {
+  if (!adminKeywordState[kwKey]) return;
+  adminKeywordState[kwKey].splice(ki, 1);
+  refreshKeywordTags(kwKey);
+}
+
+function refreshKeywordTags(kwKey) {
+  const container = document.getElementById(`kw-tags-${kwKey}`);
+  if (!container) return;
+  container.innerHTML = (adminKeywordState[kwKey] || []).map((kw, ki) =>
+    `<span class="kw-admin-tag">${escapeHtmlAdmin(kw)}<button type="button" onclick="removeKeyword('${kwKey}',${ki})">×</button></span>`
+  ).join('');
+}
 
 function openAdmin() {
   const pw = prompt('관리자 비밀번호를 입력하세요:');
@@ -2704,7 +2813,48 @@ function selectAdminScenario(idx) {
 
 function renderAdminEditor(sc, idx) {
   const area = document.getElementById('admin-edit-area');
-  const phaseSections = sc.phases.map((p, pi) => `
+  // 키워드 상태 초기화
+  adminKeywordState = {};
+  sc.phases.forEach((p, pi) => {
+    Object.entries(p.missions).forEach(([role, m]) => {
+      const kwKey = 'p' + pi + '_' + role.replace(/\//g, '_');
+      adminKeywordState[kwKey] = [...(m.keywords || [])];
+    });
+  });
+
+  const phaseSections = sc.phases.map((p, pi) => {
+    const activeRoles = getActiveRoles(p);
+    const roleCheckboxes = ALL_ROLES.map(role => {
+      const safeId = `p${pi}-role-${role.replace(/\//g,'-')}`;
+      const checked = activeRoles.includes(role) ? 'checked' : '';
+      return `<label class="role-checkbox-label">
+        <input type="checkbox" id="${safeId}" ${checked}> ${ROLE_ICONS[role]||''} ${role}
+      </label>`;
+    }).join('');
+
+    const missionSections = Object.entries(p.missions).map(([role, m]) => {
+      const kwKey = 'p' + pi + '_' + role.replace(/\//g, '_');
+      const tagsHtml = (adminKeywordState[kwKey] || []).map((kw, ki) =>
+        `<span class="kw-admin-tag">${escapeHtmlAdmin(kw)}<button type="button" onclick="removeKeyword('${kwKey}',${ki})">×</button></span>`
+      ).join('');
+      return `
+        <div class="admin-role-section">
+          <h4>${ROLE_ICONS[role]||''} ${role} 미션</h4>
+          <div class="admin-field"><label>미션 질문</label><textarea id="p${pi}-${role}-prompt" rows="2">${escAttr(m.prompt)}</textarea></div>
+          <div class="admin-field"><label>모범 답안</label><textarea id="p${pi}-${role}-answer" rows="3">${escAttr(m.answer)}</textarea></div>
+          <div class="admin-field">
+            <label>🎯 채점 키워드 항목</label>
+            <div class="kw-admin-wrap" id="kw-tags-${kwKey}">${tagsHtml}</div>
+            <div style="display:flex;gap:6px;align-items:center">
+              <input type="text" class="kw-admin-input" id="kw-input-${kwKey}" placeholder="키워드 입력 후 Enter 또는 추가 클릭..."
+                onkeydown="if(event.key==='Enter'){addKeyword('${kwKey}');event.preventDefault()}">
+              <button type="button" onclick="addKeyword('${kwKey}')" style="padding:6px 14px;background:var(--primary);color:white;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">+ 추가</button>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+
+    return `
     <div class="admin-phase-section">
       <div class="admin-phase-header" onclick="toggleAdminPhase(${pi})">
         <span>${p.emoji}</span>
@@ -2721,15 +2871,14 @@ function renderAdminEditor(sc, idx) {
           <div class="admin-field"><label>제한시간 (초)</label><input type="number" id="p${pi}-duration" value="${p.duration}"></div>
         </div>
         <div class="admin-field"><label>상황 설명</label><textarea id="p${pi}-situation" rows="3">${escAttr(p.situation)}</textarea></div>
-        ${Object.entries(p.missions).map(([role, m]) => `
-          <div class="admin-role-section">
-            <h4>${ROLE_ICONS[role]||''} ${role} 미션</h4>
-            <div class="admin-field"><label>미션 질문</label><textarea id="p${pi}-${role}-prompt" rows="2">${escAttr(m.prompt)}</textarea></div>
-            <div class="admin-field"><label>모범 답안</label><textarea id="p${pi}-${role}-answer" rows="3">${escAttr(m.answer)}</textarea></div>
-            <div class="admin-field"><label>키워드 (쉼표로 구분)</label><input id="p${pi}-${role}-keywords" value="${escAttr(m.keywords.join(', '))}"></div>
-          </div>`).join('')}
+        <div class="admin-field">
+          <label>👥 이 단계 참여 역할</label>
+          <div class="role-checkbox-group">${roleCheckboxes}</div>
+        </div>
+        ${missionSections}
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
   area.innerHTML = `
     <div class="admin-section">
@@ -2749,6 +2898,11 @@ function renderAdminEditor(sc, idx) {
       <button class="btn-admin-save" onclick="saveAdminScenario(${idx})">💾 저장</button>
       <button class="btn-admin-danger" onclick="confirmDeleteScenario(${idx})">🗑 이 시나리오 삭제</button>
     </div>`;
+}
+
+// escapeHtml용 관리자 전용 (줄바꿈 유지 버전)
+function escapeHtmlAdmin(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 function toggleAdminPhase(pi) {
@@ -2775,11 +2929,17 @@ function saveAdminScenario(idx) {
     p.date = document.getElementById(`p${pi}-date`).value.trim();
     p.duration = parseInt(document.getElementById(`p${pi}-duration`).value) || p.duration;
     p.situation = document.getElementById(`p${pi}-situation`).value.trim();
+    // 참여 역할 체크박스 저장
+    p.activeRoles = ALL_ROLES.filter(role => {
+      const el = document.getElementById(`p${pi}-role-${role.replace(/\//g,'-')}`);
+      return el && el.checked;
+    });
     Object.keys(p.missions).forEach(role => {
       p.missions[role].prompt = document.getElementById(`p${pi}-${role}-prompt`).value.trim();
       p.missions[role].answer = document.getElementById(`p${pi}-${role}-answer`).value.trim();
-      const kwRaw = document.getElementById(`p${pi}-${role}-keywords`).value;
-      p.missions[role].keywords = kwRaw.split(',').map(k=>k.trim()).filter(Boolean);
+      // 태그 키워드 상태에서 읽기
+      const kwKey = 'p' + pi + '_' + role.replace(/\//g, '_');
+      p.missions[role].keywords = adminKeywordState[kwKey] || [];
     });
   });
 
