@@ -857,7 +857,61 @@
 <!-- ══════════════ STEP 7 ══════════════ -->
 <div class="step-section" id="step7">
   <div class="step-header">
-    <div class="step-num-badge" style="background:var(--red)">7</div>
+    <div class="step-num-badge" style="background:var(--green)">7</div>
+    <div class="step-header-text">
+      <h2>단계별 피드백 — 체크리스트 확인</h2>
+      <p>각 역할이 핵심 키워드를 포함했는지 체크리스트로 확인합니다.</p>
+    </div>
+  </div>
+  <div class="step-body">
+    <p class="desc">피드백 화면에서는 역할별로 응답을 확인하고, <strong>모더레이터가 직접 체크</strong>할 수 있는 항목이 표시됩니다. 함께 확인하며 빠진 내용을 토론해 주세요.</p>
+
+    <div class="ui-mockup">
+      <div class="ui-mockup-label green">피드백 — 담임교사 응답 카드 예시</div>
+      <div class="fb-mock">
+        <div style="background:var(--primary);color:white;padding:10px 14px;font-size:13px;font-weight:700;border-radius:6px 6px 0 0;margin:-18px -18px 14px">📚 담임교사 — 이담임</div>
+        <div style="margin-bottom:10px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">작성 내용</div>
+          <div style="font-size:13px;line-height:1.7;color:var(--text)">보건교사에게 즉시 연락하고, 교실 환기를 시킨 후 진한이에게 마스크를 씌워 보건실로 동행하였습니다. 부모님께 전화하여 병원 진료를 안내했습니다.</div>
+        </div>
+        <div style="margin-bottom:8px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:6px">핵심 키워드 체크</div>
+          <div class="checklist-item checked"><div class="cb checked">✓</div>보건실 연락</div>
+          <div class="checklist-item checked"><div class="cb checked">✓</div>환기·위생지도</div>
+          <div class="checklist-item checked"><div class="cb checked">✓</div>마스크 동행</div>
+          <div class="checklist-item"><div class="cb"></div>일시적 관찰실 <span style="font-size:10px;color:var(--muted);margin-left:4px">← 클릭해서 체크 가능</span></div>
+          <div class="checklist-item"><div class="cb"></div>학부모 안내</div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;background:#f0f4fa;border-radius:6px;padding:8px 12px">
+          <div>
+            <div style="font-size:11px;color:var(--muted)">달성 점수</div>
+            <div style="font-size:20px;font-weight:800;color:var(--primary)">3 / 5</div>
+          </div>
+          <div style="flex:1;margin-left:12px">
+            <div style="height:6px;background:#e8edf3;border-radius:3px;overflow:hidden">
+              <div style="width:60%;height:6px;background:#f39c12;border-radius:3px"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tip-box">체크리스트 항목을 <strong>클릭</strong>하면 수동으로 체크/체크 해제할 수 있습니다. 응답에 있어도 키워드가 인식되지 않을 때 사용하세요. 수동 체크는 점수에 반영됩니다.</div>
+
+    <p class="desc" style="margin-top:14px">피드백 진행 순서:</p>
+    <ol class="step-list">
+      <li>각 역할 카드를 순서대로 열어 <strong>응답 내용을 큰 화면에 띄워</strong> 함께 확인</li>
+      <li>키워드가 체크된 항목은 칭찬, 빠진 항목은 <strong>왜 중요한지 설명</strong></li>
+      <li>필요하면 모범 답안을 참고해 보충 설명</li>
+      <li>토론이 끝나면 컨트롤 패널에서 다음 단계 시작</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ══════════════ STEP 8 ══════════════ -->
+<div class="step-section" id="step8">
+  <div class="step-header">
+    <div class="step-num-badge" style="background:var(--red)">8</div>
     <div class="step-header-text">
       <h2>단계 전환 — 피드백 확인 후 다음 단계로</h2>
       <p>단계가 끝나면 피드백을 보고 역할을 재배정한 뒤 다음 단계를 시작합니다.</p>
@@ -909,60 +963,6 @@
 
     <div class="tip-box">역할 재배정 없이 동일 역할로 계속 진행하려면 드롭다운을 수정하지 않고 <strong>[▶ 2단계 시작]</strong>만 눌러도 됩니다.</div>
     <div class="warn-box">2단계(확진자 발생)에는 <strong>교장/교감</strong>과 <strong>교육(지원)청</strong>이 추가됩니다. 해당 역할 참가자가 없으면 프록시 패널에서 대리 입력해 주세요.</div>
-  </div>
-</div>
-
-<!-- ══════════════ STEP 8 ══════════════ -->
-<div class="step-section" id="step8">
-  <div class="step-header">
-    <div class="step-num-badge" style="background:var(--green)">8</div>
-    <div class="step-header-text">
-      <h2>단계별 피드백 — 체크리스트 확인</h2>
-      <p>각 역할이 핵심 키워드를 포함했는지 체크리스트로 확인합니다.</p>
-    </div>
-  </div>
-  <div class="step-body">
-    <p class="desc">피드백 화면에서는 역할별로 응답을 확인하고, <strong>모더레이터가 직접 체크</strong>할 수 있는 항목이 표시됩니다. 함께 확인하며 빠진 내용을 토론해 주세요.</p>
-
-    <div class="ui-mockup">
-      <div class="ui-mockup-label green">피드백 — 담임교사 응답 카드 예시</div>
-      <div class="fb-mock">
-        <div style="background:var(--primary);color:white;padding:10px 14px;font-size:13px;font-weight:700;border-radius:6px 6px 0 0;margin:-18px -18px 14px">📚 담임교사 — 이담임</div>
-        <div style="margin-bottom:10px">
-          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">작성 내용</div>
-          <div style="font-size:13px;line-height:1.7;color:var(--text)">보건교사에게 즉시 연락하고, 교실 환기를 시킨 후 진한이에게 마스크를 씌워 보건실로 동행하였습니다. 부모님께 전화하여 병원 진료를 안내했습니다.</div>
-        </div>
-        <div style="margin-bottom:8px">
-          <div style="font-size:11px;color:var(--muted);margin-bottom:6px">핵심 키워드 체크</div>
-          <div class="checklist-item checked"><div class="cb checked">✓</div>보건실 연락</div>
-          <div class="checklist-item checked"><div class="cb checked">✓</div>환기·위생지도</div>
-          <div class="checklist-item checked"><div class="cb checked">✓</div>마스크 동행</div>
-          <div class="checklist-item"><div class="cb"></div>일시적 관찰실 <span style="font-size:10px;color:var(--muted);margin-left:4px">← 클릭해서 체크 가능</span></div>
-          <div class="checklist-item"><div class="cb"></div>학부모 안내</div>
-        </div>
-        <div style="display:flex;align-items:center;justify-content:space-between;background:#f0f4fa;border-radius:6px;padding:8px 12px">
-          <div>
-            <div style="font-size:11px;color:var(--muted)">달성 점수</div>
-            <div style="font-size:20px;font-weight:800;color:var(--primary)">3 / 5</div>
-          </div>
-          <div style="flex:1;margin-left:12px">
-            <div style="height:6px;background:#e8edf3;border-radius:3px;overflow:hidden">
-              <div style="width:60%;height:6px;background:#f39c12;border-radius:3px"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="tip-box">체크리스트 항목을 <strong>클릭</strong>하면 수동으로 체크/체크 해제할 수 있습니다. 응답에 있어도 키워드가 인식되지 않을 때 사용하세요. 수동 체크는 점수에 반영됩니다.</div>
-
-    <p class="desc" style="margin-top:14px">피드백 진행 순서:</p>
-    <ol class="step-list">
-      <li>각 역할 카드를 순서대로 열어 <strong>응답 내용을 큰 화면에 띄워</strong> 함께 확인</li>
-      <li>키워드가 체크된 항목은 칭찬, 빠진 항목은 <strong>왜 중요한지 설명</strong></li>
-      <li>필요하면 모범 답안을 참고해 보충 설명</li>
-      <li>토론이 끝나면 컨트롤 패널에서 다음 단계 시작</li>
-    </ol>
   </div>
 </div>
 
