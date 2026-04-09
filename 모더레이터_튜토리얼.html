@@ -336,6 +336,98 @@
   }
   .summary-flow-arrow { font-size: 18px; opacity: 0.6; }
 
+  /* ── 플로팅 네비게이션 ── */
+  #floating-nav {
+    position: fixed; right: 20px; top: 50%;
+    transform: translateY(-50%);
+    z-index: 1000;
+    display: flex; flex-direction: column; gap: 0;
+    background: white;
+    border-radius: 14px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+    border: 1px solid var(--border);
+    overflow: hidden;
+    transition: all 0.3s;
+  }
+  #floating-nav.collapsed .nav-items { display: none; }
+  #floating-nav.collapsed { border-radius: 14px; }
+
+  .nav-toggle {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 10px 14px;
+    background: var(--primary); color: white;
+    font-size: 12px; font-weight: 700;
+    cursor: pointer; border: none; font-family: inherit;
+    width: 100%; letter-spacing: 0.03em;
+    transition: background 0.2s;
+  }
+  .nav-toggle:hover { background: #244f7a; }
+  .nav-toggle-icon { font-size: 14px; transition: transform 0.3s; }
+  #floating-nav.collapsed .nav-toggle-icon { transform: rotate(180deg); }
+
+  .nav-items { display: flex; flex-direction: column; }
+
+  .nav-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 14px;
+    font-size: 11px; font-weight: 600; color: var(--muted);
+    text-decoration: none; cursor: pointer;
+    border-left: 3px solid transparent;
+    transition: all 0.15s; white-space: nowrap;
+    border-bottom: 1px solid #f0f4f8;
+  }
+  .nav-item:last-child { border-bottom: none; }
+  .nav-item:hover { background: #f0f4f8; color: var(--text); }
+  .nav-item.active {
+    color: var(--primary); font-weight: 700;
+    border-left-color: var(--primary);
+    background: #eaf2ff;
+  }
+  .nav-item .nav-dot {
+    width: 20px; height: 20px; border-radius: 50%;
+    background: var(--border); color: var(--muted);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; font-weight: 800; flex-shrink: 0;
+    transition: all 0.15s;
+  }
+  .nav-item.active .nav-dot {
+    background: var(--primary); color: white;
+  }
+
+  /* 진행도 바 */
+  .nav-progress-bar {
+    height: 3px; background: #e8edf3;
+    position: relative; overflow: hidden;
+  }
+  .nav-progress-fill {
+    height: 100%; background: var(--primary);
+    width: 0%; transition: width 0.4s ease;
+  }
+
+  /* 맨 위로 버튼 */
+  #btn-top {
+    position: fixed; right: 20px; bottom: 24px; z-index: 1000;
+    width: 40px; height: 40px; border-radius: 50%;
+    background: var(--primary); color: white;
+    border: none; cursor: pointer; font-size: 18px;
+    box-shadow: 0 3px 14px rgba(0,0,0,0.2);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.3s, transform 0.2s;
+    font-family: inherit;
+  }
+  #btn-top.visible { opacity: 1; pointer-events: auto; }
+  #btn-top:hover { transform: translateY(-2px); background: #244f7a; }
+
+  @media (max-width: 1100px) {
+    #floating-nav { right: 10px; }
+    #btn-top { right: 10px; }
+    .nav-item .nav-label { display: none; }
+    .nav-item { padding: 8px 10px; justify-content: center; }
+    .nav-toggle { padding: 8px 10px; font-size: 11px; }
+    #floating-nav .nav-toggle span:last-child { display: none; }
+  }
+
   @media (max-width: 640px) {
     .content { padding: 0 16px 40px; }
     .toc { margin: 16px; }
@@ -347,10 +439,56 @@
     .sim-role-grid { grid-template-columns: 1fr 1fr; }
     .page-header { padding: 24px 20px; }
     .page-header::after { display: none; }
+    #floating-nav { display: none; }
+    #btn-top { right: 14px; bottom: 14px; }
   }
 </style>
 </head>
 <body>
+
+<!-- ══════════════ 플로팅 네비게이션 ══════════════ -->
+<nav id="floating-nav">
+  <button class="nav-toggle" onclick="toggleNav()">
+    <span class="nav-toggle-icon">▲</span>
+    <span>단계 이동</span>
+  </button>
+  <div class="nav-progress-bar"><div class="nav-progress-fill" id="nav-progress"></div></div>
+  <div class="nav-items">
+    <a class="nav-item active" onclick="scrollToStep('step1')">
+      <div class="nav-dot">1</div><span class="nav-label">시나리오 선택</span>
+    </a>
+    <a class="nav-item" onclick="scrollToStep('step2')">
+      <div class="nav-dot">2</div><span class="nav-label">조·이름·역할 설정</span>
+    </a>
+    <a class="nav-item" onclick="scrollToStep('step3')">
+      <div class="nav-dot">3</div><span class="nav-label">QR 코드 초대</span>
+    </a>
+    <a class="nav-item" onclick="scrollToStep('step4')">
+      <div class="nav-dot">4</div><span class="nav-label">대기실·훈련 시작</span>
+    </a>
+    <a class="nav-item" onclick="scrollToStep('step5')">
+      <div class="nav-dot">5</div><span class="nav-label">타이머·응답 관찰</span>
+    </a>
+    <a class="nav-item" onclick="scrollToStep('step6')">
+      <div class="nav-dot">6</div><span class="nav-label">프록시 대리 입력</span>
+    </a>
+    <a class="nav-item" onclick="scrollToStep('step7')">
+      <div class="nav-dot">7</div><span class="nav-label">단계 전환·재배정</span>
+    </a>
+    <a class="nav-item" onclick="scrollToStep('step8')">
+      <div class="nav-dot">8</div><span class="nav-label">단계별 피드백</span>
+    </a>
+    <a class="nav-item" onclick="scrollToStep('step9')">
+      <div class="nav-dot">9</div><span class="nav-label">최종 피드백</span>
+    </a>
+    <a class="nav-item" onclick="scrollToStep('step10')">
+      <div class="nav-dot">10</div><span class="nav-label">관리자 모드</span>
+    </a>
+  </div>
+</nav>
+
+<!-- 맨 위로 버튼 -->
+<button id="btn-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" title="맨 위로">↑</button>
 
 <!-- ══════════════ 페이지 헤더 ══════════════ -->
 <div class="page-header">
@@ -968,6 +1106,52 @@
 <div style="text-align:center;padding:24px;font-size:12px;color:var(--muted)">
   감염병 모의훈련 시뮬레이션 · 모더레이터 튜토리얼 v1.0 · 예시: 인플루엔자 시나리오
 </div>
+
+<script>
+  const STEPS = ['step1','step2','step3','step4','step5','step6','step7','step8','step9','step10'];
+
+  function scrollToStep(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const offset = 20;
+    const top = el.getBoundingClientRect().top + window.scrollY - offset;
+    window.scrollTo({ top, behavior: 'smooth' });
+  }
+
+  function toggleNav() {
+    document.getElementById('floating-nav').classList.toggle('collapsed');
+  }
+
+  function updateNav() {
+    const scrollY = window.scrollY;
+    const winH = window.innerHeight;
+    const docH = document.documentElement.scrollHeight;
+
+    // 맨 위로 버튼
+    const btnTop = document.getElementById('btn-top');
+    scrollY > 300 ? btnTop.classList.add('visible') : btnTop.classList.remove('visible');
+
+    // 진행도 바
+    const progress = Math.min(100, (scrollY / (docH - winH)) * 100);
+    document.getElementById('nav-progress').style.width = progress + '%';
+
+    // 현재 단계 하이라이트
+    let current = STEPS[0];
+    for (const id of STEPS) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      if (el.getBoundingClientRect().top <= winH * 0.4) current = id;
+    }
+
+    document.querySelectorAll('.nav-item').forEach((item, i) => {
+      const isActive = STEPS[i] === current;
+      item.classList.toggle('active', isActive);
+    });
+  }
+
+  window.addEventListener('scroll', updateNav, { passive: true });
+  updateNav();
+</script>
 
 </body>
 </html>
