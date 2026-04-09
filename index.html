@@ -1751,7 +1751,7 @@ function toggleParticipantsPanel() {
 
 function renderRoleReassignPanel(state, inProgress = false) {
   const participants = state.participants || {};
-  const nonMod = Object.values(participants).filter(p => p.role !== '모더레이터');
+  const nonMod = Object.values(participants).filter(p => p.role && p.role !== '모더레이터' && p.name);
   const title = inProgress ? '🔄 진행 중 역할 조정' : '🔄 역할 재배정';
   if (!nonMod.length) {
     return `
@@ -1828,19 +1828,29 @@ function renderRoleReassignPanel(state, inProgress = false) {
 
 function renderRoleAnnouncementBanner(state) {
   if (!state.roleAnnouncement) return '';
-  const rows = Object.entries(state.roleAnnouncement.assignments).map(([name, role]) => `
+  const isNow = state.roleAnnouncement.isNow === true;
+  // 유효한 항목만 표시 (null/undefined role 제외, 실제 participants에 있는 이름만)
+  const validEntries = Object.entries(state.roleAnnouncement.assignments)
+    .filter(([name, role]) => name && role && role !== 'null' && state.participants && state.participants[name]);
+  if (!validEntries.length) return '';
+  const rows = validEntries.map(([name, role]) => `
     <tr>
       <td style="padding:6px 10px;font-size:13px">${escapeHtml(name)}</td>
       <td style="padding:6px 10px;font-size:13px;font-weight:700">${ROLE_ICONS[role]||''} ${role}</td>
     </tr>`).join('');
+  const title   = isNow ? '⚡ 역할 변경 안내' : '📢 역할 재배정 공지';
+  const desc    = isNow
+    ? '모더레이터가 현재 단계에서 역할을 재배정했습니다. 본인의 역할을 확인하세요.'
+    : '모더레이터가 다음 단계 역할을 재배정했습니다. 아래 안내에 따라 역할을 변경해 주세요.';
+  const colHead = isNow ? '변경된 역할' : '다음 역할';
   return `
     <div style="background:#fff8e1;border:2px solid #f39c12;border-radius:var(--radius);padding:16px 20px;margin-bottom:16px">
-      <h4 style="font-size:14px;font-weight:700;color:#e67e22;margin-bottom:10px">📢 역할 재배정 공지</h4>
-      <p style="font-size:12px;color:#7f6000;margin-bottom:10px">모더레이터가 다음 단계 역할을 재배정했습니다.</p>
+      <h4 style="font-size:14px;font-weight:700;color:#e67e22;margin-bottom:8px">${title}</h4>
+      <p style="font-size:12px;color:#7f6000;margin-bottom:10px">${desc}</p>
       <table style="border-collapse:collapse;background:rgba(243,156,18,0.08);border-radius:6px;overflow:hidden">
         <thead><tr style="background:rgba(243,156,18,0.2)">
           <th style="padding:6px 10px;font-size:12px;text-align:left;font-weight:600">이름</th>
-          <th style="padding:6px 10px;font-size:12px;text-align:left;font-weight:600">다음 역할</th>
+          <th style="padding:6px 10px;font-size:12px;text-align:left;font-weight:600">${colHead}</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
@@ -1849,11 +1859,14 @@ function renderRoleAnnouncementBanner(state) {
 
 function announceRoleChange() {
   const assignments = {};
-  document.querySelectorAll('.role-reassign-select').forEach(sel => {
-    assignments[sel.dataset.name] = sel.value;
-  });
   const state = getState();
-  state.roleAnnouncement = { assignments, timestamp: Date.now() };
+  document.querySelectorAll('.role-reassign-select').forEach(sel => {
+    const name = sel.dataset.name;
+    const newRole = sel.value;
+    if (!name || !newRole || newRole === 'null' || !state.participants || !state.participants[name]) return;
+    assignments[name] = newRole;
+  });
+  state.roleAnnouncement = { assignments, timestamp: Date.now(), isNow: false };
   saveState(state);
   broadcast('STATE_CHANGED', {});
   renderExercise();
@@ -1871,20 +1884,22 @@ function clearRoleAnnouncement() {
 function applyRoleChangeNow() {
   if (myRole !== '모더레이터') return;
   const state = getState();
+  const assignments = {};
   let changed = false;
   document.querySelectorAll('.role-reassign-select').forEach(sel => {
     const name = sel.dataset.name;
     const newRole = sel.value;
-    if (state.participants && state.participants[name] && state.participants[name].role !== newRole) {
+    // state.participants에 실제로 존재하고 유효한 역할인 경우만 처리
+    if (!name || !newRole || newRole === 'null' || !state.participants || !state.participants[name]) return;
+    assignments[name] = newRole;
+    if (state.participants[name].role !== newRole) {
       state.participants[name].role = newRole;
       changed = true;
     }
   });
   if (!changed) { alert('변경된 역할이 없습니다.'); return; }
-  // 공지 배너도 함께 띄워 참가자에게 알림
-  const assignments = {};
-  document.querySelectorAll('.role-reassign-select').forEach(sel => { assignments[sel.dataset.name] = sel.value; });
-  state.roleAnnouncement = { assignments, timestamp: Date.now() };
+  // isNow: true → 배너에서 "현재 단계" 문구 사용
+  state.roleAnnouncement = { assignments, timestamp: Date.now(), isNow: true };
   saveState(state);
   broadcast('STATE_CHANGED', {});
   renderExercise();
