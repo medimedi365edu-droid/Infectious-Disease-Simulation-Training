@@ -2192,12 +2192,13 @@ function renderProxySection(phase, phaseResponses, participants) {
     const answerId  = `proxy-ans-${role.replace(/\//g,'-')}`;
     const copyId    = `proxy-copy-${role.replace(/\//g,'-')}`;
     const safeAnswer = escapeHtml(mission.answer || '');
+    const attrAnswer = escAttr(mission.answer || '');
 
     const answerBlock = `
       <button class="proxy-answer-toggle" onclick="toggleProxyAnswer('${answerId}')">
         📋 모범 답안 보기 / 숨기기
       </button>
-      <div class="proxy-answer-box" id="${answerId}">
+      <div class="proxy-answer-box" id="${answerId}" data-answer="${attrAnswer}">
         <button class="btn-copy-answer" id="${copyId}" onclick="copyProxyAnswer('${answerId}','${copyId}','${textareaId}')">
           📋 복사 후 붙여넣기
         </button>
@@ -2250,9 +2251,8 @@ function toggleProxyAnswer(answerId) {
 function copyProxyAnswer(answerId, copyId, textareaId) {
   const box = document.getElementById(answerId);
   if (!box) return;
-  // 복사할 텍스트: 버튼 제외한 순수 텍스트
-  const btn = box.querySelector('.btn-copy-answer');
-  const rawText = btn ? box.innerText.replace(btn.innerText, '').trim() : box.innerText.trim();
+  // data-answer에 저장된 원본 텍스트를 사용 (줄바꿈 완벽 보존)
+  const rawText = box.dataset.answer || '';
 
   // 텍스트 영역에 붙여넣기
   const ta = document.getElementById(textareaId);
@@ -2485,6 +2485,25 @@ function buildManualScoreCard(phase, phaseNum, entry, savedChecks, isModerator, 
   </div>`;
 }
 
+// ─── 역할 표시 순서 정렬 ────────────────────────────────
+// 기본 순서: 모더레이터, 담임교사, 보건(담당)교사, 영양(교)사, 행정실, 교장/교감, 교육(지원)청, 유관기관
+const ROLE_DISPLAY_ORDER = ['모더레이터', '담임교사', '보건(담당)교사', '영양(교)사', '행정실', '교장/교감', '교육(지원)청', '유관기관'];
+
+// 역할 배열을 기본 순서 + 접속한 역할 우선으로 정렬
+// 접속한 역할 먼저, 미접속(프록시) 역할 나중에, 동일 그룹 내에서는 ROLE_DISPLAY_ORDER 순서 유지
+function sortRolesForDisplay(roles, participants) {
+  const connectedRoles = new Set(
+    Object.values(participants || {}).map(p => p.role).filter(r => r && r !== '모더레이터')
+  );
+  const order = r => {
+    const idx = ROLE_DISPLAY_ORDER.indexOf(r);
+    return idx === -1 ? 99 : idx;
+  };
+  const connected = roles.filter(r => connectedRoles.has(r)).sort((a, b) => order(a) - order(b));
+  const missing   = roles.filter(r => !connectedRoles.has(r)).sort((a, b) => order(a) - order(b));
+  return [...connected, ...missing];
+}
+
 function buildInlineFeedbackHtml(phase, phaseResponses, participants) {
   participants = participants || {};
   const state = getState();
@@ -2492,7 +2511,7 @@ function buildInlineFeedbackHtml(phase, phaseResponses, participants) {
   const phaseScores = (state.scores && state.scores[`phase${phaseNum}`]) || {};
   const isModerator = myRole === '모더레이터';
 
-  const cards = getActiveRoles(phase).filter(r => r !== '모더레이터').flatMap(role => {
+  const cards = sortRolesForDisplay(getActiveRoles(phase).filter(r => r !== '모더레이터'), participants).flatMap(role => {
     const mission = phase.missions[getBaseRole(role)];
     if (!mission) return [];
     const entries = getRoleEntries(phaseResponses, participants, role);
@@ -2517,7 +2536,7 @@ function renderPhaseFeedback(body, state) {
   const isModerator = myRole === '모더레이터';
   const participants = state.participants || {};
 
-  const cards = getActiveRoles(phase).filter(r => r !== '모더레이터').flatMap(role => {
+  const cards = sortRolesForDisplay(getActiveRoles(phase).filter(r => r !== '모더레이터'), participants).flatMap(role => {
     const mission = phase.missions[getBaseRole(role)];
     if (!mission) return [];
     const entries = getRoleEntries(phaseResponses, participants, role);
@@ -2798,12 +2817,15 @@ function prevPhase() {
   if (myRole !== '모더레이터') return;
   const state = getState();
   if (state.showingFeedback) {
+    // 피드백 화면 → 해당 단계 진행 화면으로 (타이머 종료 상태)
     state.showingFeedback = false; saveState(state); broadcast('PHASE_CHANGE', {}); renderExercise();
   } else {
     const prev = state.currentPhase - 1;
-    if (prev < 0) return;
+    if (prev < 1) return; // 1단계 미만으로는 돌아갈 수 없음
+    // 이전 단계의 피드백(채점) 화면을 바로 보여줌 → 기록 확인 가능
     state.currentPhase = prev; state.timerRunning = false;
-    state.phaseStartTime = null; state.showingFeedback = false;
+    state.timerPaused = false; state.timerPausedRemaining = null;
+    state.phaseStartTime = null; state.showingFeedback = true;
     saveState(state); broadcast('PHASE_CHANGE', { phase: prev }); renderExercise();
   }
 }
@@ -2881,7 +2903,7 @@ function renderFeedback() {
       </div>
       <div id="${sectionId}" style="display:${isOpen?'block':'none'}">
         <div class="fb-grid">
-          ${getActiveRoles(phase).filter(r => r !== '모더레이터').flatMap(role => {
+          ${sortRolesForDisplay(getActiveRoles(phase).filter(r => r !== '모더레이터'), state.participants || {}).flatMap(role => {
             const mission = phase.missions[getBaseRole(role)];
             if (!mission) return [];
             const participants = state.participants || {};
