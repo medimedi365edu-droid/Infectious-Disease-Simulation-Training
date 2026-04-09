@@ -2169,7 +2169,13 @@ function renderPhase(body, state) {
     ta.addEventListener('input', () => { clearTimeout(draftTimer); draftTimer = setTimeout(() => saveMyDraft(ta.value), 600); });
     ta.addEventListener('blur', () => {
       clearTimeout(draftTimer); saveMyDraft(ta.value);
-      if (pendingRender) { pendingRender = false; renderExercise(); }
+      if (pendingRender) {
+        pendingRender = false;
+        // ✅ 수정 2: blur가 제출 버튼 클릭에 의해 발생한 경우,
+        // 클릭 이벤트(submitResponse)가 먼저 처리된 후 렌더되도록 50ms 지연
+        // → blur가 즉시 DOM을 교체하면 click 이벤트가 소실되어 제출이 1번에 안 되는 버그 방지
+        setTimeout(() => renderExercise(), 50);
+      }
     });
   }
 }
@@ -2530,11 +2536,31 @@ function buildInlineFeedbackHtml(phase, phaseResponses, participants) {
 function renderPhaseFeedback(body, state) {
   const phase = ACTIVE_PHASES[state.currentPhase - 1];
   const phaseNum = state.currentPhase;
-  const phaseResponses = (state.responses || {})[`phase${phaseNum}`] || {};
-  const phaseScores = (state.scores && state.scores[`phase${phaseNum}`]) || {};
+  const phaseKey = `phase${phaseNum}`;
+  const phaseResponses = (state.responses || {})[phaseKey] || {};
+  const phaseScores = (state.scores && state.scores[phaseKey]) || {};
   const isLast = phaseNum === 3;
   const isModerator = myRole === '모더레이터';
-  const participants = state.participants || {};
+
+  // ✅ 수정 1: roleHistory 기반으로 해당 단계 당시 역할로 participants 재구성
+  // 역할이 이전 단계와 달라도 당시 응답 키("역할:이름")를 올바르게 찾을 수 있도록 함
+  const phaseRoleHistory = (state.roleHistory && state.roleHistory[phaseKey]) || {};
+  const currentParticipants = state.participants || {};
+  let participants;
+  if (Object.keys(phaseRoleHistory).length > 0) {
+    participants = {};
+    Object.entries(currentParticipants).forEach(([name, info]) => {
+      const historicRole = phaseRoleHistory[name];
+      participants[name] = historicRole ? { ...info, role: historicRole } : info;
+    });
+    // roleHistory에는 있지만 현재 participants에 없는 참가자도 복원
+    // (퇴장한 참가자의 응답도 피드백에 표시)
+    Object.entries(phaseRoleHistory).forEach(([name, role]) => {
+      if (!participants[name]) participants[name] = { name, role };
+    });
+  } else {
+    participants = currentParticipants;
+  }
 
   const cards = sortRolesForDisplay(getActiveRoles(phase).filter(r => r !== '모더레이터'), participants).flatMap(role => {
     const mission = phase.missions[getBaseRole(role)];
@@ -2795,6 +2821,12 @@ function nextPhaseWithDuration() {
   state.timerPaused = false;
   state.timerPausedRemaining = null;
   state.showingFeedback = false;
+  // 역할 이력 저장: 이 단계에서 각 참가자가 어떤 역할인지 기록
+  if (!state.roleHistory) state.roleHistory = {};
+  state.roleHistory[`phase${next}`] = {};
+  Object.entries(state.participants || {}).forEach(([name, info]) => {
+    state.roleHistory[`phase${next}`][name] = info.role;
+  });
   saveState(state); broadcast('PHASE_CHANGE', { phase: next }); renderExercise();
 }
 function nextPhase() {
@@ -2891,6 +2923,33 @@ function renderFeedback() {
     const sectionId   = `fb-phase-section-${phase.id}`;
     // 1단계는 기본 펼침, 나머지는 접힘
     const isOpen = idx === 0;
+
+    // ★ 핵심 수정: 이 단계의 roleHistory를 기준으로 participants를 재구성
+    // 역할이 단계마다 바뀐 경우에도 해당 단계의 응답(역할:이름 키)을 올바르게 찾을 수 있도록 함
+    const phaseRoleHistory = (state.roleHistory && state.roleHistory[phaseKey]) || {};
+    const currentParticipants = state.participants || {};
+    let phaseParticipants;
+    if (Object.keys(phaseRoleHistory).length > 0) {
+      // roleHistory가 있으면: 각 참가자의 역할을 해당 단계 당시 역할로 교체
+      phaseParticipants = {};
+      Object.entries(currentParticipants).forEach(([name, info]) => {
+        const historicRole = phaseRoleHistory[name];
+        phaseParticipants[name] = historicRole
+          ? { ...info, role: historicRole }
+          : info;
+      });
+      // roleHistory에는 있지만 현재 participants에 없는 참가자도 복원
+      // (퇴장한 참가자의 응답도 피드백에 표시)
+      Object.entries(phaseRoleHistory).forEach(([name, role]) => {
+        if (!phaseParticipants[name]) {
+          phaseParticipants[name] = { name, role };
+        }
+      });
+    } else {
+      // roleHistory가 없으면 현재 participants 그대로 사용
+      phaseParticipants = currentParticipants;
+    }
+
     html += `<div class="fb-phase-section">
       <div class="fb-phase-title" style="cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between"
            onclick="toggleFbSection('${sectionId}','${sectionId}-icon')">
@@ -2903,11 +2962,10 @@ function renderFeedback() {
       </div>
       <div id="${sectionId}" style="display:${isOpen?'block':'none'}">
         <div class="fb-grid">
-          ${sortRolesForDisplay(getActiveRoles(phase).filter(r => r !== '모더레이터'), state.participants || {}).flatMap(role => {
+          ${sortRolesForDisplay(getActiveRoles(phase).filter(r => r !== '모더레이터'), phaseParticipants).flatMap(role => {
             const mission = phase.missions[getBaseRole(role)];
             if (!mission) return [];
-            const participants = state.participants || {};
-            const entries = getRoleEntries(phaseResponses, participants, role);
+            const entries = getRoleEntries(phaseResponses, phaseParticipants, role);
             return entries.map(e => {
               const savedChecks = phaseScores[e.key] ?? null;
               return buildManualScoreCard(phase, phase.id, {...e, role}, savedChecks, isModerator, myPhaseKey);
