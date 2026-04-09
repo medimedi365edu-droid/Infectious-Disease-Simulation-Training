@@ -1682,7 +1682,7 @@ function renderLobby(body, state) {
   const pList = Object.values(participants).map(info =>
     `<div class="participant-item">
       <div class="p-dot online"></div>
-      <div><div>${ROLE_ICONS[info.role]||''} ${info.role}</div><div class="p-role">${info.name}</div></div>
+      <div>${ROLE_ICONS[info.role]||''} <strong>${info.role}</strong> <span class="p-role">· ${info.name}</span></div>
     </div>`
   ).join('');
 
@@ -1749,53 +1749,79 @@ function toggleParticipantsPanel() {
   if (icon) icon.textContent = participantsPanelOpen ? '▲' : '▼';
 }
 
-function renderRoleReassignPanel(state) {
+function renderRoleReassignPanel(state, inProgress = false) {
   const participants = state.participants || {};
   const nonMod = Object.values(participants).filter(p => p.role !== '모더레이터');
+  const title = inProgress ? '🔄 진행 중 역할 조정' : '🔄 역할 재배정';
   if (!nonMod.length) {
     return `
-      <div style="background:white;border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 20px;margin-bottom:16px;border-left:4px solid #f39c12">
-        <h4 style="font-size:14px;font-weight:700;color:#e67e22;margin-bottom:6px">🔄 역할 재배정</h4>
-        <p style="font-size:12px;color:var(--muted)">현재 접속한 참가자가 없습니다. 참가자가 접속하면 역할 재배정 기능이 활성화됩니다.</p>
+      <div style="background:white;border-radius:var(--radius);box-shadow:var(--shadow);padding:${inProgress?'12px 14px':'16px 20px'};margin-bottom:${inProgress?'10':'16'}px;border-left:4px solid #f39c12">
+        <h4 style="font-size:${inProgress?'12':'14'}px;font-weight:700;color:#e67e22;margin-bottom:6px">${title}</h4>
+        <p style="font-size:12px;color:var(--muted)">현재 접속한 참가자가 없습니다. 참가자가 접속하면 역할 ${inProgress?'조정':'재배정'} 기능이 활성화됩니다.</p>
       </div>`;
   }
 
-  // 다음 단계의 activeRoles만 표시 (없으면 전체 역할 표시)
-  const nextPhaseIdx = state.currentPhase; // currentPhase는 1-based이므로 다음 단계 인덱스 = currentPhase
-  const nextPhase = ACTIVE_PHASES[nextPhaseIdx];
-  const allowedRoles = nextPhase ? getActiveRoles(nextPhase) : DISPLAY_ROLES;
-  const nextPhaseLabel = nextPhase ? `${nextPhaseIdx + 1}단계: ${nextPhase.title}` : null;
+  // 진행 중이면 현재 단계 역할, 피드백 후이면 다음 단계 역할 표시
+  let allowedRoles, phaseLabel;
+  if (inProgress) {
+    const curPhase = ACTIVE_PHASES[state.currentPhase - 1];
+    allowedRoles = curPhase ? getActiveRoles(curPhase) : DISPLAY_ROLES;
+    phaseLabel = curPhase ? `${state.currentPhase}단계: ${curPhase.title}` : null;
+  } else {
+    const nextPhaseIdx = state.currentPhase;
+    const nextPhase = ACTIVE_PHASES[nextPhaseIdx];
+    allowedRoles = nextPhase ? getActiveRoles(nextPhase) : DISPLAY_ROLES;
+    phaseLabel = nextPhase ? `${nextPhaseIdx + 1}단계: ${nextPhase.title}` : null;
+  }
 
+  const pad = inProgress ? '6px 10px' : '8px 12px';
+  const fs  = inProgress ? '12px' : '13px';
   const rows = nonMod.map(info => {
-    // 현재 역할이 allowedRoles에 없으면 첫 번째 허용 역할로 기본 선택
     const defaultRole = allowedRoles.includes(info.role) ? info.role : allowedRoles[0];
     return `
     <tr>
-      <td style="padding:8px 12px;font-size:13px">${escapeHtml(info.name)}</td>
-      <td style="padding:8px 12px;font-size:13px">${ROLE_ICONS[info.role]||''} ${info.role}</td>
-      <td style="padding:8px 12px">
-        <select class="role-reassign-select" data-name="${escapeHtml(info.name)}" style="padding:5px 8px;border:2px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit">
+      <td style="padding:${pad};font-size:${fs}">${escapeHtml(info.name)}</td>
+      <td style="padding:${pad};font-size:${fs}">${ROLE_ICONS[info.role]||''} ${info.role}</td>
+      <td style="padding:${pad}">
+        <select class="role-reassign-select" data-name="${escapeHtml(info.name)}" style="padding:4px 6px;border:2px solid var(--border);border-radius:6px;font-size:${fs};font-family:inherit">
           ${allowedRoles.map(r=>`<option value="${r}" ${r===defaultRole?'selected':''}>${ROLE_ICONS[r]||''} ${r}</option>`).join('')}
         </select>
       </td>
     </tr>`;
   }).join('');
+
+  const outerPad  = inProgress ? '12px 14px' : '18px 20px';
+  const outerMb   = inProgress ? '10px' : '16px';
+  const thPad     = inProgress ? '6px 10px' : '8px 12px';
+  const thFs      = inProgress ? '11px' : '12px';
+  const btnPad    = inProgress ? '7px 14px' : '9px 20px';
+  const btnFs     = inProgress ? '12px' : '13px';
+  const phaseTag  = phaseLabel
+    ? `<div style="font-size:11px;font-weight:700;color:#7d3c98;background:#f5eafa;border-radius:6px;padding:5px 8px;margin-bottom:10px">📋 ${inProgress?'현재':'다음'} 단계 참여 역할: ${allowedRoles.map(r=>`${ROLE_ICONS[r]||''}${r}`).join(', ')}<br><span style="font-weight:400;color:var(--muted)">(${phaseLabel})</span></div>`
+    : '';
+  const descText  = inProgress
+    ? '참가자 역할을 지금 즉시 변경합니다. 변경 즉시 해당 참가자 화면에 반영됩니다.'
+    : '다음 단계를 위해 역할을 재배정하고 참가자들에게 공지하세요.';
+  const actionBtn = inProgress
+    ? `<button onclick="applyRoleChangeNow()" style="padding:${btnPad};background:#e67e22;color:white;border:none;border-radius:8px;font-size:${btnFs};font-weight:700;cursor:pointer;font-family:inherit">⚡ 지금 바로 적용</button>`
+    : `<button onclick="announceRoleChange()" style="padding:${btnPad};background:#e67e22;color:white;border:none;border-radius:8px;font-size:${btnFs};font-weight:700;cursor:pointer;font-family:inherit">📢 역할 재배정 공지하기</button>
+       ${state.roleAnnouncement?`<button onclick="clearRoleAnnouncement()" style="padding:${btnPad};background:white;color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;font-family:inherit">공지 취소</button>`:''}`;
+
   return `
-    <div style="background:white;border-radius:var(--radius);box-shadow:var(--shadow);padding:18px 20px;margin-bottom:16px;border-left:4px solid #f39c12">
-      <h4 style="font-size:14px;font-weight:700;color:#e67e22;margin-bottom:10px">🔄 역할 재배정</h4>
-      <p style="font-size:12px;color:var(--muted);margin-bottom:${nextPhaseLabel ? '6px' : '12px'}">다음 단계를 위해 역할을 재배정하고 참가자들에게 공지하세요.</p>
-      ${nextPhaseLabel ? `<div style="font-size:12px;font-weight:700;color:#7d3c98;background:#f5eafa;border-radius:6px;padding:6px 10px;margin-bottom:12px">📋 다음 단계 참여 역할: ${allowedRoles.map(r=>`${ROLE_ICONS[r]||''}${r}`).join(', ')}<br><span style="font-weight:400;color:var(--muted)">(${nextPhaseLabel})</span></div>` : ''}
+    <div style="background:white;border-radius:var(--radius);box-shadow:var(--shadow);padding:${outerPad};margin-bottom:${outerMb};border-left:4px solid #f39c12">
+      <h4 style="font-size:${inProgress?'13':'14'}px;font-weight:700;color:#e67e22;margin-bottom:${inProgress?'6':'10'}px">${title}</h4>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:${phaseLabel?'6px':'10px'}">${descText}</p>
+      ${phaseTag}
       <table style="width:100%;border-collapse:collapse;background:#f7f9fc;border-radius:8px;overflow:hidden">
         <thead><tr style="background:var(--border)">
-          <th style="padding:8px 12px;font-size:12px;text-align:left;font-weight:600">이름</th>
-          <th style="padding:8px 12px;font-size:12px;text-align:left;font-weight:600">현재 역할</th>
-          <th style="padding:8px 12px;font-size:12px;text-align:left;font-weight:600">다음 역할</th>
+          <th style="padding:${thPad};font-size:${thFs};text-align:left;font-weight:600">이름</th>
+          <th style="padding:${thPad};font-size:${thFs};text-align:left;font-weight:600">현재 역할</th>
+          <th style="padding:${thPad};font-size:${thFs};text-align:left;font-weight:600">${inProgress?'변경 역할':'다음 역할'}</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
-      <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
-        <button onclick="announceRoleChange()" style="padding:9px 20px;background:#e67e22;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">📢 역할 재배정 공지하기</button>
-        ${state.roleAnnouncement?`<button onclick="clearRoleAnnouncement()" style="padding:9px 16px;background:white;color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;font-family:inherit">공지 취소</button>`:''}
+      <div style="margin-top:${inProgress?'8':'12'}px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        ${actionBtn}
       </div>
     </div>`;
 }
@@ -1810,7 +1836,7 @@ function renderRoleAnnouncementBanner(state) {
   return `
     <div style="background:#fff8e1;border:2px solid #f39c12;border-radius:var(--radius);padding:16px 20px;margin-bottom:16px">
       <h4 style="font-size:14px;font-weight:700;color:#e67e22;margin-bottom:10px">📢 역할 재배정 공지</h4>
-      <p style="font-size:12px;color:#7f6000;margin-bottom:10px">모더레이터가 다음 단계 역할을 재배정했습니다. 아래 안내에 따라 역할을 변경해 주세요.</p>
+      <p style="font-size:12px;color:#7f6000;margin-bottom:10px">모더레이터가 다음 단계 역할을 재배정했습니다.</p>
       <table style="border-collapse:collapse;background:rgba(243,156,18,0.08);border-radius:6px;overflow:hidden">
         <thead><tr style="background:rgba(243,156,18,0.2)">
           <th style="padding:6px 10px;font-size:12px;text-align:left;font-weight:600">이름</th>
@@ -1836,6 +1862,29 @@ function announceRoleChange() {
 function clearRoleAnnouncement() {
   const state = getState();
   state.roleAnnouncement = null;
+  saveState(state);
+  broadcast('STATE_CHANGED', {});
+  renderExercise();
+}
+
+// 진행 중 역할 즉시 적용 (state.participants 바로 업데이트)
+function applyRoleChangeNow() {
+  if (myRole !== '모더레이터') return;
+  const state = getState();
+  let changed = false;
+  document.querySelectorAll('.role-reassign-select').forEach(sel => {
+    const name = sel.dataset.name;
+    const newRole = sel.value;
+    if (state.participants && state.participants[name] && state.participants[name].role !== newRole) {
+      state.participants[name].role = newRole;
+      changed = true;
+    }
+  });
+  if (!changed) { alert('변경된 역할이 없습니다.'); return; }
+  // 공지 배너도 함께 띄워 참가자에게 알림
+  const assignments = {};
+  document.querySelectorAll('.role-reassign-select').forEach(sel => { assignments[sel.dataset.name] = sel.value; });
+  state.roleAnnouncement = { assignments, timestamp: Date.now() };
   saveState(state);
   broadcast('STATE_CHANGED', {});
   renderExercise();
@@ -2001,11 +2050,12 @@ function renderPhase(body, state) {
           </div>
         </div>`;
 
-    // 좌측: 시나리오 카드, 우측: 컨트롤 패널 + 참가자현황
+    // 좌측: 시나리오 카드, 우측: 컨트롤 패널 + 역할조정 + 참가자현황
     workHtml = `<div class="work-area">${scenarioCardHtml}</div>`;
     const modRightHtml = `
       <div class="scenario-panel mod-right-panel">
         ${modControlPanelHtml}
+        ${renderRoleReassignPanel(state, true)}
         ${participantsCardHtml}
       </div>`;
 
