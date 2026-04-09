@@ -1318,8 +1318,14 @@ function listenRoom() {
     try {
       if (!snap.exists()) return;
       const raw = snap.val();
+      const prevTimerRunning = _cachedState ? _cachedState.timerRunning : false;
+      const prevPhase = _cachedState ? _cachedState.currentPhase : -1;
       _cachedState = normalizeState(raw);
-      if (isTyping()) { pendingRender = true; return; }
+      // 타이머 시작/정지 또는 단계 변경 시엔 타이핑 중이어도 즉시 리렌더 (제출 버튼 disabled 버그 방지)
+      const forceRender = _cachedState.timerRunning !== prevTimerRunning
+                       || _cachedState.currentPhase !== prevPhase;
+      if (!forceRender && isTyping()) { pendingRender = true; return; }
+      pendingRender = false;
       renderExercise();
     } catch(err) {
       console.error('listenRoom error:', err);
@@ -1679,12 +1685,14 @@ function renderBody(state) {
 
 function renderLobby(body, state) {
   const participants = state.participants || {};
-  const pList = Object.values(participants).map(info =>
-    `<div class="participant-item">
-      <div class="p-dot online"></div>
-      <div>${ROLE_ICONS[info.role]||''} <strong>${info.role}</strong> <span class="p-role">· ${info.name}</span></div>
-    </div>`
-  ).join('');
+  const pList = Object.values(participants)
+    .sort((a, b) => (a.role === '모더레이터' ? -1 : b.role === '모더레이터' ? 1 : 0))
+    .map(info =>
+      `<div class="participant-item">
+        <div class="p-dot online"></div>
+        <div>${ROLE_ICONS[info.role]||''} <strong>${info.role}</strong> <span class="p-role">· ${info.name}</span></div>
+      </div>`
+    ).join('');
 
   if (myRole === '모더레이터') {
     body.innerHTML = `<div style="flex:1"><div class="lobby-card" style="margin:0 auto">
@@ -1777,7 +1785,12 @@ function renderRoleReassignPanel(state, inProgress = false) {
   const pad = inProgress ? '6px 10px' : '8px 12px';
   const fs  = inProgress ? '12px' : '13px';
   const rows = nonMod.map(info => {
-    const defaultRole = allowedRoles.includes(info.role) ? info.role : allowedRoles[0];
+    // 피드백 후 공지 모드: 이미 공지된 역할이 있으면 select 기본값으로 반영
+    const announced = (!inProgress && state.roleAnnouncement && state.roleAnnouncement.assignments)
+      ? state.roleAnnouncement.assignments[info.name] : null;
+    const defaultRole = announced && allowedRoles.includes(announced)
+      ? announced
+      : (allowedRoles.includes(info.role) ? info.role : allowedRoles[0]);
     return `
     <tr>
       <td style="padding:${pad};font-size:${fs}">${escapeHtml(info.name)}</td>
