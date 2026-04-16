@@ -1556,11 +1556,17 @@ const FONT_OFFSET_STEP = 2;
 
 // 각 요소의 기본 폰트 크기 (px)
 const FONT_BASE = {
-  scenario : 14,   // 상황 본문
-  mission  : 14,   // 문제(미션) 본문
-  keyword  : 12,   // 키워드 힌트
-  tag      : 11,   // 키워드 태그
-  textarea : 14,   // 답변 입력창
+  scenario     : 14,   // 상황 본문
+  mission      : 14,   // 문제(미션) 본문
+  keyword      : 12,   // 키워드 힌트
+  tag          : 11,   // 키워드 태그
+  textarea     : 14,   // 답변 입력창
+  responseText : 13,   // 다른 역할 작성 현황 본문
+  proxyHint    : 12,   // 대리입력 힌트
+  fbSectionP   : 13,   // 피드백 카드 내용
+  fbSectionH4  : 12,   // 피드백 카드 라벨
+  fbSummaryP   : 14,   // 피드백 요약 본문
+  fbSummaryH3  : 16,   // 피드백 요약 제목
 };
 
 function getFontOffset() {
@@ -1570,29 +1576,34 @@ function getFontOffset() {
 function applyFontSize() {
   const offset = getFontOffset();
 
+  const set = (selector, base) =>
+    document.querySelectorAll(selector).forEach(el => {
+      el.style.fontSize = (base + offset) + 'px';
+    });
+
   // 상황 본문
   const sb = document.getElementById('scenario-body-text');
   if (sb) sb.style.fontSize = (FONT_BASE.scenario + offset) + 'px';
 
-  // 문제(미션) 본문
-  document.querySelectorAll('.mission-prompt').forEach(el => {
-    el.style.fontSize = (FONT_BASE.mission + offset) + 'px';
-  });
+  // 문제(미션) 본문 / 키워드 / 태그 / 입력창
+  set('.mission-prompt',      FONT_BASE.mission);
+  set('.keyword-hint',        FONT_BASE.keyword);
+  set('.kw-tag',              FONT_BASE.tag);
+  set('.response-textarea',   FONT_BASE.textarea);
 
-  // 키워드 힌트
-  document.querySelectorAll('.keyword-hint').forEach(el => {
-    el.style.fontSize = (FONT_BASE.keyword + offset) + 'px';
-  });
+  // 다른 역할 작성 현황
+  set('.response-text',       FONT_BASE.responseText);
 
-  // 키워드 태그
-  document.querySelectorAll('.kw-tag').forEach(el => {
-    el.style.fontSize = (FONT_BASE.tag + offset) + 'px';
-  });
+  // 대리입력 힌트
+  set('.proxy-mission-hint',  FONT_BASE.proxyHint);
 
-  // 답변 입력창
-  document.querySelectorAll('.response-textarea').forEach(el => {
-    el.style.fontSize = (FONT_BASE.textarea + offset) + 'px';
-  });
+  // 피드백 카드 내용 / 라벨
+  set('.fb-section p',        FONT_BASE.fbSectionP);
+  set('.fb-section h4',       FONT_BASE.fbSectionH4);
+
+  // 피드백 요약
+  set('.fb-summary p',        FONT_BASE.fbSummaryP);
+  set('.fb-summary h3',       FONT_BASE.fbSummaryH3);
 
   // 위젯 단계 표시 업데이트
   const stepLabel = document.getElementById('fw-step-label');
@@ -2935,6 +2946,7 @@ function renderFeedbackTransition() {
   document.getElementById('screen-exercise').style.display = 'none';
   document.getElementById('screen-feedback').style.display = 'block';
   renderFeedback();
+  applyFontSize(); // 피드백 화면에도 저장된 글씨 크기 적용
 }
 
 // ═══════════════════════════════════════════════════════
