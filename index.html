@@ -193,19 +193,36 @@
   .phase-3-color { background: var(--phase3); }
   .phase-4-color { background: var(--feedback); }
   .scenario-body { padding: 16px 18px; font-size: 14px; line-height: 1.7; }
-  .font-size-controls {
-    display: flex; align-items: center; gap: 4px; margin-left: auto;
+  /* ── 글씨 크기 플로팅 위젯 ── */
+  #font-size-widget {
+    position: fixed; bottom: 24px; right: 20px; z-index: 800;
+    background: white; border-radius: 14px; box-shadow: 0 4px 20px rgba(0,0,0,0.18);
+    border: 1.5px solid #d1dbe8; padding: 10px 14px;
+    display: none; flex-direction: column; align-items: center; gap: 8px;
+    min-width: 110px;
   }
-  .font-size-btn {
-    background: rgba(255,255,255,0.25); border: 1px solid rgba(255,255,255,0.5);
-    color: white; border-radius: 5px; cursor: pointer; font-family: inherit;
-    font-weight: 700; line-height: 1; padding: 2px 7px;
-    transition: background 0.15s;
+  #font-size-widget .fw-label {
+    font-size: 11px; color: var(--muted); font-weight: 600; letter-spacing: 0.3px;
   }
-  .font-size-btn:hover { background: rgba(255,255,255,0.45); }
-  .font-size-label {
-    color: rgba(255,255,255,0.85); font-size: 11px; min-width: 26px; text-align: center;
+  #font-size-widget .fw-controls {
+    display: flex; align-items: center; gap: 6px;
   }
+  #font-size-widget .fw-btn {
+    width: 34px; height: 34px; border-radius: 8px; border: 1.5px solid #d1dbe8;
+    background: #f4f7fb; color: var(--primary); font-size: 16px; font-weight: 700;
+    cursor: pointer; font-family: inherit; display: flex; align-items: center;
+    justify-content: center; transition: all 0.15s; line-height: 1;
+  }
+  #font-size-widget .fw-btn:hover { background: #e0ebf8; border-color: var(--primary); }
+  #font-size-widget .fw-step {
+    font-size: 13px; font-weight: 700; color: var(--primary);
+    min-width: 28px; text-align: center;
+  }
+  #font-size-widget .fw-reset {
+    font-size: 11px; color: var(--muted); background: none; border: none;
+    cursor: pointer; font-family: inherit; text-decoration: underline; padding: 0;
+  }
+  #font-size-widget .fw-reset:hover { color: var(--primary); }
   .date-tag {
     display: inline-block; background: #fff3e0; color: #e65100;
     border-radius: 4px; padding: 2px 8px; font-size: 12px; font-weight: 700; margin-bottom: 8px;
@@ -817,7 +834,24 @@
     <button class="btn-join" id="btn-join" disabled>훈련 참가</button>
     <button class="btn-back-home" onclick="goHome()">← 시나리오 선택으로 돌아가기</button>
     <p class="session-hint" id="session-hint-text">※ 모더레이터가 QR 코드나 링크를 공유하면 자동으로 방에 연결됩니다</p>
+    <button id="btn-clear-room" onclick="clearRoomFromUrl()"
+      style="display:none;width:100%;margin-top:8px;padding:9px;background:none;border:1px dashed #e0a070;
+             border-radius:8px;font-size:13px;color:#b05010;cursor:pointer;font-family:inherit;transition:all 0.2s"
+      onmouseover="this.style.background='#fff3e8'" onmouseout="this.style.background='none'">
+      🔄 방 코드 초기화 (연결 끊기)
+    </button>
   </div>
+</div>
+
+<!-- ═══════════════════════════ FONT SIZE WIDGET ═══════════════════════════ -->
+<div id="font-size-widget">
+  <span class="fw-label">글씨 크기</span>
+  <div class="fw-controls">
+    <button class="fw-btn" onclick="adjustFontSize(-2)" title="작게">가<sub style="font-size:9px">−</sub></button>
+    <span class="fw-step" id="fw-step-label">기본</span>
+    <button class="fw-btn" onclick="adjustFontSize(2)" title="크게">가<sup style="font-size:9px">+</sup></button>
+  </div>
+  <button class="fw-reset" onclick="resetFontSize()">초기화</button>
 </div>
 
 <!-- ═══════════════════════════ EXERCISE SCREEN ═══════════════════════════ -->
@@ -1275,6 +1309,7 @@ function goHome() {
   document.getElementById('screen-login').style.display = 'none';
   document.getElementById('screen-exercise').style.display = 'none';
   document.getElementById('screen-feedback').style.display = 'none';
+  document.getElementById('font-size-widget').style.display = 'none';
   document.getElementById('screen-home').style.display = 'flex';
   myName = ''; myRole = ''; myGroup = ''; selectedRole = '';
   document.getElementById('input-name').value = '';
@@ -1302,6 +1337,7 @@ function leaveToLogin() {
   roomCode = ''; _cachedState = null;
   // 화면 전환: 로그인 화면으로 (조·이름·역할 초기화)
   document.getElementById('screen-exercise').style.display = 'none';
+  document.getElementById('font-size-widget').style.display = 'none';
   myName = ''; myRole = ''; selectedRole = '';
   document.getElementById('input-name').value = '';
   document.querySelectorAll('.role-btn').forEach(b => {
@@ -1517,29 +1553,74 @@ function initChannel() {
 // ═══════════════════════════════════════════════════════
 //  상황 글씨 크기 조절
 // ═══════════════════════════════════════════════════════
-const FONT_SIZE_KEY = 'ttx_situation_font_size';
-const FONT_SIZE_MIN = 12;
-const FONT_SIZE_MAX = 24;
-const FONT_SIZE_DEFAULT = 14;
+//  글씨 크기 조절 (상황·문제·키워드·입력창 종합)
+// ═══════════════════════════════════════════════════════
+const FONT_SIZE_KEY   = 'ttx_content_font_offset';
+const FONT_OFFSET_MIN = -2;   // 최소 -2 (12px)
+const FONT_OFFSET_MAX = 10;   // 최대 +10 (24px)
+const FONT_OFFSET_STEP = 2;
 
-function getSituationFontSize() {
-  return parseInt(localStorage.getItem(FONT_SIZE_KEY) || FONT_SIZE_DEFAULT);
+// 각 요소의 기본 폰트 크기 (px)
+const FONT_BASE = {
+  scenario : 14,   // 상황 본문
+  mission  : 14,   // 문제(미션) 본문
+  keyword  : 12,   // 키워드 힌트
+  tag      : 11,   // 키워드 태그
+  textarea : 14,   // 답변 입력창
+};
+
+function getFontOffset() {
+  return parseInt(localStorage.getItem(FONT_SIZE_KEY) || '0');
 }
 
-function applySituationFontSize() {
-  const size = getSituationFontSize();
-  const body = document.getElementById('scenario-body-text');
-  if (body) body.style.fontSize = size + 'px';
-  const label = document.getElementById('font-size-label');
-  if (label) label.textContent = size + 'px';
+function applyFontSize() {
+  const offset = getFontOffset();
+
+  // 상황 본문
+  const sb = document.getElementById('scenario-body-text');
+  if (sb) sb.style.fontSize = (FONT_BASE.scenario + offset) + 'px';
+
+  // 문제(미션) 본문
+  document.querySelectorAll('.mission-prompt').forEach(el => {
+    el.style.fontSize = (FONT_BASE.mission + offset) + 'px';
+  });
+
+  // 키워드 힌트
+  document.querySelectorAll('.keyword-hint').forEach(el => {
+    el.style.fontSize = (FONT_BASE.keyword + offset) + 'px';
+  });
+
+  // 키워드 태그
+  document.querySelectorAll('.kw-tag').forEach(el => {
+    el.style.fontSize = (FONT_BASE.tag + offset) + 'px';
+  });
+
+  // 답변 입력창
+  document.querySelectorAll('.response-textarea').forEach(el => {
+    el.style.fontSize = (FONT_BASE.textarea + offset) + 'px';
+  });
+
+  // 위젯 단계 표시 업데이트
+  const stepLabel = document.getElementById('fw-step-label');
+  if (stepLabel) {
+    stepLabel.textContent = offset === 0 ? '기본' : (offset > 0 ? `+${offset}` : `${offset}`);
+  }
 }
 
 function adjustFontSize(delta) {
-  const current = getSituationFontSize();
-  const next = Math.min(FONT_SIZE_MAX, Math.max(FONT_SIZE_MIN, current + delta));
+  const current = getFontOffset();
+  const next = Math.min(FONT_OFFSET_MAX, Math.max(FONT_OFFSET_MIN, current + delta));
   localStorage.setItem(FONT_SIZE_KEY, next);
-  applySituationFontSize();
+  applyFontSize();
 }
+
+function resetFontSize() {
+  localStorage.setItem(FONT_SIZE_KEY, 0);
+  applyFontSize();
+}
+
+// 이전 함수명 호환 (renderExercise에서 호출)
+function applySituationFontSize() { applyFontSize(); }
 
 // ═══════════════════════════════════════════════════════
 //  중간 입장 안내 팝업
@@ -1762,6 +1843,12 @@ document.getElementById('btn-join').addEventListener('click', async () => {
     const gbEl = document.getElementById('my-group-header');
     gbEl.textContent = `${myGroup}조`;
     gbEl.style.display = 'inline-block';
+
+    // 참여자에게만 글씨 크기 위젯 표시
+    if (myRole !== '모더레이터') {
+      document.getElementById('font-size-widget').style.display = 'flex';
+      applyFontSize();
+    }
 
     // 모더레이터면 QR 모달 바로 표시
     if (myRole === '모더레이터') {
@@ -2124,12 +2211,7 @@ function renderPhase(body, state) {
   const scenarioCardHtml = `
     <div class="scenario-card">
       <div class="scenario-header ${phase.colorClass}">
-        <span>${phase.emoji} ${state.currentPhase}단계 상황</span>
-        <div class="font-size-controls">
-          <button class="font-size-btn" onclick="adjustFontSize(-1)" title="글씨 작게">가<sup style="font-size:8px">−</sup></button>
-          <span class="font-size-label" id="font-size-label">${getSituationFontSize()}px</span>
-          <button class="font-size-btn" onclick="adjustFontSize(1)" title="글씨 크게">가<sup style="font-size:8px">+</sup></button>
-        </div>
+        ${phase.emoji} ${state.currentPhase}단계 상황
       </div>
       <div class="scenario-body" id="scenario-body-text">
         <div class="date-tag">📅 ${phase.date}</div>
@@ -3179,6 +3261,13 @@ function renderFeedback() {
   fb.innerHTML = html;
 }
 
+function clearRoomFromUrl() {
+  // URL에서 room 파라미터 제거 후 페이지 초기화
+  const url = new URL(location.href);
+  url.searchParams.delete('room');
+  location.replace(url.toString());
+}
+
 function resetAll() {
   if (confirm('훈련을 처음부터 다시 시작하시겠습니까? 모든 응답이 초기화됩니다.')) {
     if (dbRef) {
@@ -3189,7 +3278,10 @@ function resetAll() {
       fresh.createdAt = Date.now();
       dbRef.set(fresh);
     }
-    location.reload();
+    // room 파라미터 제거 후 리로드 (방 코드 잔류 방지)
+    const url = new URL(location.href);
+    url.searchParams.delete('room');
+    location.replace(url.toString());
   }
 }
 
@@ -3556,6 +3648,9 @@ window.addEventListener('load', async () => {
         if (grpNum) selectGroup(grpNum);
         const hint = document.querySelector('.session-hint');
         if (hint) hint.innerHTML = `✅ 방 코드: <strong>${roomParam}</strong> — 이름과 역할을 선택 후 참가해 주세요.<br><small style="color:#e67e22">※ 모더레이터로 재접속하려면 역할에서 모더레이터를 선택하세요.</small>`;
+        // 방 코드 초기화 버튼 표시
+        const clearBtn = document.getElementById('btn-clear-room');
+        if (clearBtn) clearBtn.style.display = 'block';
       }
     }
   }
