@@ -193,36 +193,29 @@
   .phase-3-color { background: var(--phase3); }
   .phase-4-color { background: var(--feedback); }
   .scenario-body { padding: 16px 18px; font-size: 14px; line-height: 1.7; }
-  /* ── 글씨 크기 플로팅 위젯 ── */
+  /* ── 글씨 크기 헤더 인라인 컨트롤 ── */
   #font-size-widget {
-    position: fixed; bottom: 24px; right: 20px; z-index: 800;
-    background: white; border-radius: 14px; box-shadow: 0 4px 20px rgba(0,0,0,0.18);
-    border: 1.5px solid #d1dbe8; padding: 10px 14px;
-    display: none; flex-direction: column; align-items: center; gap: 8px;
-    min-width: 110px;
-  }
-  #font-size-widget .fw-label {
-    font-size: 11px; color: var(--muted); font-weight: 600; letter-spacing: 0.3px;
-  }
-  #font-size-widget .fw-controls {
-    display: flex; align-items: center; gap: 6px;
+    display: none; align-items: center; gap: 4px;
   }
   #font-size-widget .fw-btn {
-    width: 34px; height: 34px; border-radius: 8px; border: 1.5px solid #d1dbe8;
-    background: #f4f7fb; color: var(--primary); font-size: 16px; font-weight: 700;
-    cursor: pointer; font-family: inherit; display: flex; align-items: center;
-    justify-content: center; transition: all 0.15s; line-height: 1;
+    width: 28px; height: 28px; border-radius: 6px;
+    border: 1.5px solid rgba(255,255,255,0.4);
+    background: rgba(255,255,255,0.15); color: white;
+    font-size: 13px; font-weight: 700; cursor: pointer;
+    font-family: inherit; display: flex; align-items: center;
+    justify-content: center; transition: background 0.15s; line-height: 1;
   }
-  #font-size-widget .fw-btn:hover { background: #e0ebf8; border-color: var(--primary); }
+  #font-size-widget .fw-btn:hover { background: rgba(255,255,255,0.35); }
   #font-size-widget .fw-step {
-    font-size: 13px; font-weight: 700; color: var(--primary);
-    min-width: 28px; text-align: center;
+    font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.9);
+    min-width: 26px; text-align: center;
   }
   #font-size-widget .fw-reset {
-    font-size: 11px; color: var(--muted); background: none; border: none;
-    cursor: pointer; font-family: inherit; text-decoration: underline; padding: 0;
+    font-size: 10px; color: rgba(255,255,255,0.65); background: none; border: none;
+    cursor: pointer; font-family: inherit; text-decoration: underline; padding: 0 2px;
+    white-space: nowrap;
   }
-  #font-size-widget .fw-reset:hover { color: var(--primary); }
+  #font-size-widget .fw-reset:hover { color: white; }
   .date-tag {
     display: inline-block; background: #fff3e0; color: #e65100;
     border-radius: 4px; padding: 2px 8px; font-size: 12px; font-weight: 700; margin-bottom: 8px;
@@ -843,17 +836,6 @@
   </div>
 </div>
 
-<!-- ═══════════════════════════ FONT SIZE WIDGET ═══════════════════════════ -->
-<div id="font-size-widget">
-  <span class="fw-label">글씨 크기</span>
-  <div class="fw-controls">
-    <button class="fw-btn" onclick="adjustFontSize(-2)" title="작게">가<sub style="font-size:9px">−</sub></button>
-    <span class="fw-step" id="fw-step-label">기본</span>
-    <button class="fw-btn" onclick="adjustFontSize(2)" title="크게">가<sup style="font-size:9px">+</sup></button>
-  </div>
-  <button class="fw-reset" onclick="resetFontSize()">초기화</button>
-</div>
-
 <!-- ═══════════════════════════ EXERCISE SCREEN ═══════════════════════════ -->
 <div id="screen-exercise">
   <div class="ex-header">
@@ -864,6 +846,12 @@
     </div>
     <div class="phase-badge" id="phase-badge">대기 중</div>
     <div class="timer-display" id="timer-display">05:00</div>
+    <div id="font-size-widget">
+      <button class="fw-btn" onclick="adjustFontSize(-2)" title="글씨 작게">가<sub style="font-size:8px">−</sub></button>
+      <span class="fw-step" id="fw-step-label">기본</span>
+      <button class="fw-btn" onclick="adjustFontSize(2)" title="글씨 크게">가<sup style="font-size:8px">+</sup></button>
+      <button class="fw-reset" onclick="resetFontSize()">초기화</button>
+    </div>
   </div>
   <div class="phase-bar">
     <div class="phase-step" id="step-0"><span class="step-num">0</span>대기실</div>
