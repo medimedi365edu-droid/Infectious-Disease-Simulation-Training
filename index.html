@@ -96,6 +96,14 @@
   }
   .btn-back-home:hover { border-color: var(--primary); color: var(--primary); }
   .session-hint { font-size: 12px; color: var(--muted); text-align: center; margin-top: 14px; }
+  .session-hint.mid-join-notice {
+    background: #fff8e1; border-left: 4px solid #e67e22; border-radius: 6px;
+    padding: 10px 12px; text-align: left; color: #7d4e00; margin-top: 14px;
+  }
+  .role-btn .new-badge {
+    display: inline-block; font-size: 10px; background: #28a745; color: white;
+    border-radius: 3px; padding: 1px 5px; margin-left: 4px; vertical-align: middle; line-height: 1.6;
+  }
 
   /* ── GROUP SELECTOR ── */
   .group-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 10px; margin-top: 6px; }
@@ -714,6 +722,20 @@
   </div>
 </div>
 
+<!-- ═══════════════════════════ MID-JOIN NOTICE MODAL ═══════════════════════════ -->
+<div id="mid-join-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:white;border-radius:16px;padding:32px 28px;max-width:360px;width:90%;box-shadow:0 8px 48px rgba(0,0,0,0.25);text-align:center">
+    <div id="mid-join-modal-phase-icon" style="font-size:40px;margin-bottom:8px"></div>
+    <h2 style="font-size:17px;font-weight:700;color:#1a3a5c;margin-bottom:6px" id="mid-join-modal-title">훈련 진행 중</h2>
+    <p style="font-size:13px;color:#6b7c93;margin-bottom:16px" id="mid-join-modal-desc"></p>
+    <div id="mid-join-modal-roles" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:20px"></div>
+    <button onclick="document.getElementById('mid-join-modal').style.display='none'"
+      style="width:100%;padding:12px;background:#1a3a5c;color:white;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">
+      확인 후 역할 선택
+    </button>
+  </div>
+</div>
+
 <!-- ═══════════════════════════ HOME SCREEN ═══════════════════════════ -->
 <div id="screen-home">
   <div class="home-header">
@@ -1149,23 +1171,68 @@ function selectScenario(id) {
   document.getElementById('input-name').value = '';
   document.getElementById('btn-join').disabled = true;
 
-  // 시나리오에서 한 번도 활성화되지 않는 역할 버튼 비활성화
+  // 시나리오에서 한 번도 활성화되지 않는 역할 버튼 비활성화 (기본값)
   const usedRoles = getRolesUsedInScenario(sc);
-  const urlRoom2 = new URLSearchParams(location.search).get('room');
-  let phase1Roles = null;
-  if (urlRoom2 && sc.phases && sc.phases[0]) {
-    phase1Roles = getActiveRoles(sc.phases[0]);
-  }
   document.querySelectorAll('.role-btn:not(.moderator-btn)').forEach(btn => {
     const role = btn.dataset.role;
     if (!role) return;
-    const normRole = normalizeRole(role);
-    if (phase1Roles) {
-      btn.classList.toggle('disabled', !phase1Roles.includes(normRole));
-    } else {
-      btn.classList.toggle('disabled', !usedRoles.has(normRole));
-    }
+    btn.querySelectorAll('.new-badge').forEach(el => el.remove());
+    btn.classList.remove('disabled');
+    btn.classList.toggle('disabled', !usedRoles.has(normalizeRole(role)));
   });
+
+  // URL에 방 코드가 있으면 Firebase에서 현재 단계를 조회해 역할 필터 갱신
+  const urlRoom2 = new URLSearchParams(location.search).get('room');
+  if (urlRoom2) {
+    getRoomRef(urlRoom2).get().then(snap => {
+      if (!snap.exists()) return;
+      const roomState = snap.val();
+      const curPhase = roomState.currentPhase || 0;
+      if (curPhase === 0) return; // 로비 대기 중이면 기본 필터 유지
+
+      const targetPhaseIdx = (roomState.showingFeedback && curPhase < sc.phases.length)
+        ? curPhase
+        : curPhase - 1;
+      const targetPhase = sc.phases[targetPhaseIdx];
+      if (!targetPhase) return;
+
+      const activeRoles = getActiveRoles(targetPhase);
+      const phase1RolesList = getActiveRoles(sc.phases[0]);
+
+      document.querySelectorAll('.role-btn:not(.moderator-btn)').forEach(btn => {
+        const r = normalizeRole(btn.dataset.role);
+        if (!r) return;
+        btn.querySelectorAll('.new-badge').forEach(el => el.remove());
+        btn.classList.remove('disabled');
+
+        if (!activeRoles.includes(r)) {
+          btn.classList.add('disabled');
+        } else if (!phase1RolesList.includes(r)) {
+          const badge = document.createElement('span');
+          badge.className = 'new-badge';
+          badge.textContent = '신규';
+          btn.appendChild(badge);
+        }
+      });
+
+      // 단계 안내 배너 업데이트
+      const hint = document.getElementById('session-hint-text');
+      if (hint) {
+        const phaseLabel = (roomState.showingFeedback && curPhase < sc.phases.length)
+          ? `${curPhase + 1}단계`
+          : `${curPhase}단계`;
+        hint.className = 'session-hint mid-join-notice';
+        hint.innerHTML =
+          `⚠️ 현재 <strong>${targetPhase.emoji} ${targetPhase.title} (${phaseLabel})</strong> 진행 중입니다.<br>` +
+          `이 단계에서 선택 가능한 역할만 활성화되어 있습니다.<br>` +
+          `<small style="opacity:0.8">💡 <strong>신규</strong> 표시는 이번 단계에서 새로 참여하는 역할입니다.</small>`;
+        hint.style.borderLeftColor = targetPhase.color;
+      }
+
+      // 중간 입장 안내 팝업 표시
+      showMidJoinModal(targetPhase, activeRoles, phase1RolesList, curPhase, roomState.showingFeedback, sc.phases.length);
+    }).catch(() => {});
+  }
 
   document.getElementById('screen-home').style.display = 'none';
   document.getElementById('screen-login').style.display = 'flex';
@@ -1421,6 +1488,38 @@ function initChannel() {
 }
 
 // ═══════════════════════════════════════════════════════
+//  중간 입장 안내 팝업
+// ═══════════════════════════════════════════════════════
+function showMidJoinModal(targetPhase, activeRoles, phase1RolesList, curPhase, showingFeedback, totalPhases) {
+  const phaseLabel = (showingFeedback && curPhase < totalPhases)
+    ? `${curPhase + 1}단계`
+    : `${curPhase}단계`;
+
+  document.getElementById('mid-join-modal-phase-icon').textContent = targetPhase.emoji;
+  document.getElementById('mid-join-modal-title').textContent =
+    `${targetPhase.title} (${phaseLabel}) 진행 중`;
+  document.getElementById('mid-join-modal-desc').textContent =
+    '훈련이 이미 시작되었습니다. 아래 역할 중 하나를 선택해 참여하세요.';
+
+  const rolesBox = document.getElementById('mid-join-modal-roles');
+  rolesBox.innerHTML = '';
+  activeRoles.forEach(role => {
+    const isNew = !phase1RolesList.includes(role);
+    const icon = ROLE_ICONS[role] || '';
+    const chip = document.createElement('div');
+    chip.style.cssText =
+      `display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:20px;font-size:13px;font-weight:600;` +
+      `background:${isNew ? '#e8f8ee' : '#f0f4f8'};color:${isNew ? '#1a7a3a' : '#1a3a5c'};` +
+      `border:1.5px solid ${isNew ? '#82d4a0' : '#c8d8ea'};`;
+    chip.innerHTML = `${icon} ${role}${isNew ? ' <span style="font-size:10px;background:#28a745;color:white;border-radius:3px;padding:1px 4px;margin-left:2px">신규</span>' : ''}`;
+    rolesBox.appendChild(chip);
+  });
+
+  const modal = document.getElementById('mid-join-modal');
+  modal.style.display = 'flex';
+}
+
+// ═══════════════════════════════════════════════════════
 //  QR 코드 표시
 // ═══════════════════════════════════════════════════════
 function showQRModal(code) {
@@ -1544,17 +1643,56 @@ document.getElementById('btn-join').addEventListener('click', async () => {
         btnJoin.disabled = false; btnJoin.textContent = '훈련 참가';
         return;
       }
-      // 현재 진행 단계의 역할만 선택 가능하도록 필터링
+      // 중간 입장 처리: 현재 진행 단계 역할만 선택 가능하도록 필터링
       const joinedState = getState();
-      const curPhaseIdx = Math.max(0, (joinedState.currentPhase || 1) - 1);
-      const curPhase = ACTIVE_PHASES[curPhaseIdx];
-      if (curPhase) {
-        const curActiveRoles = getActiveRoles(curPhase);
-        document.querySelectorAll('.role-btn:not(.moderator-btn)').forEach(btn => {
-          const r = btn.dataset.role;
-          if (!r) return;
-          btn.classList.toggle('disabled', !curActiveRoles.includes(normalizeRole(r)));
-        });
+      const curPhase = joinedState.currentPhase || 0;
+
+      if (curPhase > 0) {
+        // 피드백 전환 중이면 다음 단계 역할 기준, 아니면 현재 단계 기준
+        const targetPhaseIdx = (joinedState.showingFeedback && curPhase < ACTIVE_PHASES.length)
+          ? curPhase
+          : curPhase - 1;
+        const targetPhase = ACTIVE_PHASES[targetPhaseIdx];
+
+        if (targetPhase) {
+          const activeRoles = getActiveRoles(targetPhase);
+          const phase1Roles = getActiveRoles(ACTIVE_PHASES[0]);
+
+          // 역할 버튼 상태 업데이트
+          document.querySelectorAll('.role-btn:not(.moderator-btn)').forEach(btn => {
+            const r = normalizeRole(btn.dataset.role);
+            if (!r) return;
+
+            // 기존 뱃지 제거
+            btn.querySelectorAll('.new-badge').forEach(el => el.remove());
+            btn.classList.remove('disabled', 'taken');
+
+            if (!activeRoles.includes(r)) {
+              // 현재 단계에 없는 역할: 비활성화
+              btn.classList.add('disabled');
+            } else if (!phase1Roles.includes(r)) {
+              // 이번 단계에서 새로 추가된 역할: 신규 뱃지
+              const badge = document.createElement('span');
+              badge.className = 'new-badge';
+              badge.textContent = '신규';
+              btn.appendChild(badge);
+            }
+          });
+
+          // 단계 안내 배너 업데이트
+          const hint = document.getElementById('session-hint-text');
+          if (hint) {
+            const phaseLabel = joinedState.showingFeedback && curPhase < ACTIVE_PHASES.length
+              ? `${curPhase + 1}단계`
+              : `${curPhase}단계`;
+            hint.className = 'session-hint mid-join-notice';
+            hint.innerHTML =
+              `⚠️ 현재 <strong>${targetPhase.emoji} ${targetPhase.title} (${phaseLabel})</strong> 진행 중입니다.<br>` +
+              `이 단계에서 선택 가능한 역할만 활성화되어 있습니다.<br>` +
+              `<small style="opacity:0.8">💡 <strong>신규</strong> 표시는 이번 단계에서 새로 참여하는 역할입니다.</small>`;
+            hint.style.borderLeftColor = targetPhase.color;
+          }
+        }
       }
     }
 
