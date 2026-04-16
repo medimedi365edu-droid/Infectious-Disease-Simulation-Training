@@ -1201,11 +1201,14 @@ function selectScenario(id) {
       if (!snap.exists()) return;
       const roomState = snap.val();
       const curPhase = roomState.currentPhase || 0;
-      if (curPhase === 0) return; // 로비 대기 중이면 기본 필터 유지
 
-      const targetPhaseIdx = (roomState.showingFeedback && curPhase < sc.phases.length)
-        ? curPhase
-        : curPhase - 1;
+      // 로비(0단계) 또는 1단계: 1단계 역할만 표시 (팝업 없음)
+      // 2단계 이후 중간 입장: 해당 단계 역할 표시 + 팝업
+      const targetPhaseIdx = (curPhase === 0)
+        ? 0 // 로비면 1단계 기준
+        : (roomState.showingFeedback && curPhase < sc.phases.length)
+          ? curPhase
+          : curPhase - 1;
       const targetPhase = sc.phases[targetPhaseIdx];
       if (!targetPhase) return;
 
