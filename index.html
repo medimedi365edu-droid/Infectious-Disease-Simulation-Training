@@ -143,7 +143,8 @@
 
   .ex-header {
     background: var(--primary); color: white; padding: 0 24px;
-    display: flex; align-items: center; gap: 16px; height: 64px; position: sticky; top: 0; z-index: 100;
+    display: flex; align-items: center; gap: 16px; height: 64px;
+    position: sticky; top: 0; z-index: 100;
     box-shadow: 0 2px 8px rgba(0,0,0,0.2);
   }
   .ex-header .title { font-size: 16px; font-weight: 700; flex: 1; }
@@ -193,15 +194,14 @@
   .phase-3-color { background: var(--phase3); }
   .phase-4-color { background: var(--feedback); }
   .scenario-body { padding: 16px 18px; font-size: 14px; line-height: 1.7; }
-  /* ── 글씨 크기 위젯 (우측 상단 고정) ── */
+  /* ── 글씨 크기 위젯 (헤더 내 우측 상단) ── */
   #font-size-widget {
     display: none;
-    position: fixed; top: 10px; right: 12px; z-index: 500;
+    position: absolute; top: 8px; right: 12px; z-index: 200;
     align-items: center; gap: 4px;
     background: rgba(255,255,255,0.12);
     border: 1px solid rgba(255,255,255,0.25);
     border-radius: 8px; padding: 4px 8px;
-    backdrop-filter: blur(4px);
   }
   #font-size-widget .fw-btn {
     width: 26px; height: 26px; border-radius: 5px;
@@ -611,7 +611,7 @@
     .group-grid { grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); }
 
     /* 훈련 헤더 */
-    .ex-header { height: auto; padding: 10px 14px; flex-wrap: wrap; gap: 8px; }
+    .ex-header { height: auto; padding: 10px 14px; flex-wrap: wrap; gap: 8px; position: relative; }
     .ex-header .title { font-size: 13px; }
     .timer-display { font-size: 18px; padding: 3px 10px; }
     .phase-bar { padding: 8px 12px; gap: 2px; }
@@ -852,12 +852,12 @@
     </div>
     <div class="phase-badge" id="phase-badge">대기 중</div>
     <div class="timer-display" id="timer-display">05:00</div>
-  </div>
-  <div id="font-size-widget">
-    <button class="fw-btn" onclick="adjustFontSize(-2)" title="글씨 작게">가<sub style="font-size:8px">−</sub></button>
-    <span class="fw-step" id="fw-step-label">기본</span>
-    <button class="fw-btn" onclick="adjustFontSize(2)" title="글씨 크게">가<sup style="font-size:8px">+</sup></button>
-    <button class="fw-reset" onclick="resetFontSize()">초기화</button>
+    <div id="font-size-widget">
+      <button class="fw-btn" onclick="adjustFontSize(-2)" title="글씨 작게">가<sub style="font-size:8px">−</sub></button>
+      <span class="fw-step" id="fw-step-label">기본</span>
+      <button class="fw-btn" onclick="adjustFontSize(2)" title="글씨 크게">가<sup style="font-size:8px">+</sup></button>
+      <button class="fw-reset" onclick="resetFontSize()">초기화</button>
+    </div>
   </div>
   <div class="phase-bar">
     <div class="phase-step" id="step-0"><span class="step-num">0</span>대기실</div>
