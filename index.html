@@ -193,6 +193,19 @@
   .phase-3-color { background: var(--phase3); }
   .phase-4-color { background: var(--feedback); }
   .scenario-body { padding: 16px 18px; font-size: 14px; line-height: 1.7; }
+  .font-size-controls {
+    display: flex; align-items: center; gap: 4px; margin-left: auto;
+  }
+  .font-size-btn {
+    background: rgba(255,255,255,0.25); border: 1px solid rgba(255,255,255,0.5);
+    color: white; border-radius: 5px; cursor: pointer; font-family: inherit;
+    font-weight: 700; line-height: 1; padding: 2px 7px;
+    transition: background 0.15s;
+  }
+  .font-size-btn:hover { background: rgba(255,255,255,0.45); }
+  .font-size-label {
+    color: rgba(255,255,255,0.85); font-size: 11px; min-width: 26px; text-align: center;
+  }
   .date-tag {
     display: inline-block; background: #fff3e0; color: #e65100;
     border-radius: 4px; padding: 2px 8px; font-size: 12px; font-weight: 700; margin-bottom: 8px;
@@ -1199,6 +1212,10 @@ function selectScenario(id) {
       const activeRoles = getActiveRoles(targetPhase);
       const phase1RolesList = getActiveRoles(sc.phases[0]);
 
+      // 1단계 진입: 활성 역할만 남기고 나머지 숨김 (팝업 없음)
+      // 2단계 이후 중간 입장: 팝업 표시
+      const isMidJoin = curPhase >= 2 || (roomState.showingFeedback && curPhase >= 1);
+
       document.querySelectorAll('.role-btn:not(.moderator-btn)').forEach(btn => {
         const r = normalizeRole(btn.dataset.role);
         if (!r) return;
@@ -1206,31 +1223,34 @@ function selectScenario(id) {
         btn.classList.remove('disabled');
 
         if (!activeRoles.includes(r)) {
-          btn.classList.add('disabled');
-        } else if (!phase1RolesList.includes(r)) {
-          const badge = document.createElement('span');
-          badge.className = 'new-badge';
-          badge.textContent = '신규';
-          btn.appendChild(badge);
+          btn.style.display = 'none';
+        } else {
+          btn.style.display = '';
+          if (isMidJoin && !phase1RolesList.includes(r)) {
+            const badge = document.createElement('span');
+            badge.className = 'new-badge';
+            badge.textContent = '신규';
+            btn.appendChild(badge);
+          }
         }
       });
 
-      // 단계 안내 배너 업데이트
-      const hint = document.getElementById('session-hint-text');
-      if (hint) {
-        const phaseLabel = (roomState.showingFeedback && curPhase < sc.phases.length)
-          ? `${curPhase + 1}단계`
-          : `${curPhase}단계`;
-        hint.className = 'session-hint mid-join-notice';
-        hint.innerHTML =
-          `⚠️ 현재 <strong>${targetPhase.emoji} ${targetPhase.title} (${phaseLabel})</strong> 진행 중입니다.<br>` +
-          `이 단계에서 선택 가능한 역할만 활성화되어 있습니다.<br>` +
-          `<small style="opacity:0.8">💡 <strong>신규</strong> 표시는 이번 단계에서 새로 참여하는 역할입니다.</small>`;
-        hint.style.borderLeftColor = targetPhase.color;
+      if (isMidJoin) {
+        // 2단계 이후 중간 입장: 배너 + 팝업 표시
+        const hint = document.getElementById('session-hint-text');
+        if (hint) {
+          const phaseLabel = (roomState.showingFeedback && curPhase < sc.phases.length)
+            ? `${curPhase + 1}단계`
+            : `${curPhase}단계`;
+          hint.className = 'session-hint mid-join-notice';
+          hint.innerHTML =
+            `⚠️ 현재 <strong>${targetPhase.emoji} ${targetPhase.title} (${phaseLabel})</strong> 진행 중입니다.<br>` +
+            `이 단계에서 선택 가능한 역할만 표시됩니다.<br>` +
+            `<small style="opacity:0.8">💡 <strong>신규</strong> 표시는 이번 단계에서 새로 참여하는 역할입니다.</small>`;
+          hint.style.borderLeftColor = targetPhase.color;
+        }
+        showMidJoinModal(targetPhase, activeRoles, phase1RolesList, curPhase, roomState.showingFeedback, sc.phases.length);
       }
-
-      // 중간 입장 안내 팝업 표시
-      showMidJoinModal(targetPhase, activeRoles, phase1RolesList, curPhase, roomState.showingFeedback, sc.phases.length);
     }).catch(() => {});
   }
 
@@ -1281,7 +1301,11 @@ function leaveToLogin() {
   document.getElementById('screen-exercise').style.display = 'none';
   myName = ''; myRole = ''; selectedRole = '';
   document.getElementById('input-name').value = '';
-  document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('selected'));
+  document.querySelectorAll('.role-btn').forEach(b => {
+    b.classList.remove('selected');
+    b.style.display = ''; // 숨겨진 역할 버튼 복원
+    b.querySelectorAll('.new-badge').forEach(el => el.remove());
+  });
   document.querySelectorAll('.group-btn').forEach(b => b.classList.remove('selected'));
   myGroup = ''; STORAGE_KEY = ''; CHANNEL_NAME = '';
   document.getElementById('btn-join').disabled = true;
@@ -1308,14 +1332,16 @@ function renderHomeScenarios() {
 // ═══════════════════════════════════════════════════════
 //  FIREBASE INIT
 // ═══════════════════════════════════════════════════════
+// ⚠️ 아래 값을 본인의 Firebase 프로젝트 설정으로 교체하세요.
+// Firebase 콘솔(https://console.firebase.google.com) → 프로젝트 설정 → 앱 추가 → 웹앱에서 확인
 const firebaseConfig = {
-  apiKey: "AIzaSyAfV0e034_PFeI3NfOUVw9VUQfbZ94hKJI",
-  authDomain: "infectious-disease-simul-e658f.firebaseapp.com",
-  databaseURL: "https://infectious-disease-simul-e658f-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "infectious-disease-simul-e658f",
-  storageBucket: "infectious-disease-simul-e658f.firebasestorage.app",
-  messagingSenderId: "746776461566",
-  appId: "1:746776461566:web:181f03437230510d66a5af"
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  databaseURL: "YOUR_DATABASE_URL",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+  appId: "YOUR_APP_ID"
 };
 if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
@@ -1485,6 +1511,33 @@ function isTyping() { const ta = document.getElementById('my-textarea'); return 
 
 function initChannel() {
   // Firebase listener가 대체 — 별도 채널 불필요
+}
+
+// ═══════════════════════════════════════════════════════
+//  상황 글씨 크기 조절
+// ═══════════════════════════════════════════════════════
+const FONT_SIZE_KEY = 'ttx_situation_font_size';
+const FONT_SIZE_MIN = 12;
+const FONT_SIZE_MAX = 24;
+const FONT_SIZE_DEFAULT = 14;
+
+function getSituationFontSize() {
+  return parseInt(localStorage.getItem(FONT_SIZE_KEY) || FONT_SIZE_DEFAULT);
+}
+
+function applySituationFontSize() {
+  const size = getSituationFontSize();
+  const body = document.getElementById('scenario-body-text');
+  if (body) body.style.fontSize = size + 'px';
+  const label = document.getElementById('font-size-label');
+  if (label) label.textContent = size + 'px';
+}
+
+function adjustFontSize(delta) {
+  const current = getSituationFontSize();
+  const next = Math.min(FONT_SIZE_MAX, Math.max(FONT_SIZE_MIN, current + delta));
+  localStorage.setItem(FONT_SIZE_KEY, next);
+  applySituationFontSize();
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1794,6 +1847,7 @@ function renderExercise() {
   updatePhaseBar(state);
   updatePhaseBadge(state);
   renderBody(state);
+  applySituationFontSize(); // 저장된 글씨 크기 적용
 }
 function updatePhaseBar(state) {
   for (let i = 0; i <= 4; i++) {
@@ -2069,9 +2123,14 @@ function renderPhase(body, state) {
   const scenarioCardHtml = `
     <div class="scenario-card">
       <div class="scenario-header ${phase.colorClass}">
-        ${phase.emoji} ${state.currentPhase}단계 상황
+        <span>${phase.emoji} ${state.currentPhase}단계 상황</span>
+        <div class="font-size-controls">
+          <button class="font-size-btn" onclick="adjustFontSize(-1)" title="글씨 작게">가<sup style="font-size:8px">−</sup></button>
+          <span class="font-size-label" id="font-size-label">${getSituationFontSize()}px</span>
+          <button class="font-size-btn" onclick="adjustFontSize(1)" title="글씨 크게">가<sup style="font-size:8px">+</sup></button>
+        </div>
       </div>
-      <div class="scenario-body">
+      <div class="scenario-body" id="scenario-body-text">
         <div class="date-tag">📅 ${phase.date}</div>
         <p>${phase.situation}</p>
       </div>
