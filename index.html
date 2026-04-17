@@ -297,6 +297,11 @@
   .btn-prev-phase:hover { border-color: var(--primary); color: var(--primary); background: #f0f6ff; }
   .ctrl-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 
+  .other-filter-bar { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+  .other-filter-btn { padding:5px 13px; border-radius:20px; border:1.5px solid var(--border); background:white; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; color:var(--muted); transition:all 0.15s; white-space:nowrap; }
+  .other-filter-btn:hover { border-color:var(--primary); color:var(--primary); }
+  .other-filter-btn.active { background:var(--primary); color:white; border-color:var(--primary); }
+
   .responses-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
   .response-card { background: white; border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
   .response-card-header {
@@ -2515,6 +2520,7 @@ function renderPhase(body, state) {
           <p style="font-size:16px;font-weight:700;color:var(--primary);margin-bottom:8px">이번 단계는 ${myRole}의 참여 단계가 아닙니다</p>
           <p style="font-size:14px;line-height:1.7">이번 단계는 대기하면서 다른 역할의 진행 상황을 확인하세요.</p>
         </div>
+        ${renderOtherRolesFilterBar(phase)}
         <div class="responses-grid">${renderAllRoleCards(phase, phaseResponses, getRKey(), state.participants||{})}</div>
       </div>`;
   } else if (!myMission) {
@@ -2525,6 +2531,7 @@ function renderPhase(body, state) {
           <p style="font-size:16px;font-weight:700;color:var(--primary);margin-bottom:8px">이 단계에서 ${myRole}의 직접 미션은 없습니다</p>
           <p style="font-size:14px;line-height:1.7">다른 역할의 작성 내용을 확인하면서 상황을 파악하세요.</p>
         </div>
+        ${renderOtherRolesFilterBar(phase)}
         <div class="responses-grid">${renderAllRoleCards(phase, phaseResponses, getRKey(), state.participants||{})}</div>
       </div>`;
   } else {
@@ -2552,6 +2559,7 @@ function renderPhase(body, state) {
         </div>
         <div>
           <h3 style="font-size:15px;font-weight:700;margin-bottom:12px">📝 다른 역할 작성 현황</h3>
+          ${renderOtherRolesFilterBar(phase)}
           <div class="responses-grid">${renderAllRoleCards(phase, phaseResponses, getRKey(), state.participants||{})}</div>
         </div>
       </div>`;
@@ -3032,6 +3040,7 @@ function renderPhaseFeedback(body, state) {
         <button class="btn-next-phase" onclick="nextPhaseWithDuration()" style="width:100%;padding:10px;font-size:14px">▶ ${phaseNum+1}단계 시작</button>
       </div>` : `<button class="btn-next-phase" onclick="nextPhase()" style="padding:12px 20px">💡 최종 피드백 보기</button>`}
       <button class="btn-prev-phase" onclick="prevPhase()">◀ ${phaseNum}단계로 돌아가기</button>
+      <button onclick="showQRModal(roomCode)" style="padding:10px 14px;border:2px solid var(--border);border-radius:8px;background:white;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;color:var(--muted);transition:all 0.2s;display:flex;align-items:center;gap:6px;justify-content:center" onmouseover="this.style.borderColor='var(--primary)';this.style.color='var(--primary)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">📱 QR 재공유</button>
     </div>` : `<p style="font-size:13px;color:var(--muted);margin-top:6px">모더레이터가 다음 단계를 진행합니다.</p>`;
 
   body.innerHTML = `<div style="flex:1">
@@ -3106,15 +3115,39 @@ function renderAllRoleCards(phase, phaseResponses, excludeKey, participants) {
       const label = `${ROLE_ICONS[role]||''} ${role}<span style="font-size:11px;font-weight:400;opacity:0.75">${nameSuffix}</span>`;
       const statusClass = e.submitted ? 'status-submitted' : e.text ? 'status-typing' : 'status-waiting';
       const statusText = e.submitted ? (e.isProxy ? '🔄 대리입력' : '✅ 제출완료') : e.text ? '✏️ 작성중...' : '대기중';
-      return `<div class="response-card">
+      return `<div class="other-role-card-wrap" data-role="${role}"><div class="response-card">
         <div class="response-card-header">
           <span>${label}</span>
           <span class="response-status ${statusClass}">${statusText}</span>
         </div>
         <div class="response-text ${!e.text?'empty':''}">${e.text?escapeHtml(e.text):'아직 작성 내용이 없습니다.'}</div>
-      </div>`;
+      </div></div>`;
     }).join('');
   }).join('');
+}
+
+const OTHER_FILTER_ROLE_ORDER = ['담임교사','보건(담당)교사','행정실','교장/교감','교육(지원)청','유관기관'];
+const OTHER_FILTER_ROLE_LABELS = {'담임교사':'담임','보건(담당)교사':'보건','행정실':'행정실','교장/교감':'교장/교감','교육(지원)청':'교육청','유관기관':'유관기관'};
+
+function renderOtherRolesFilterBar(phase) {
+  const activeRoles = getActiveRoles(phase).filter(r => r !== '모더레이터');
+  const sorted = [...activeRoles].sort((a,b) => {
+    const ai = OTHER_FILTER_ROLE_ORDER.indexOf(a), bi = OTHER_FILTER_ROLE_ORDER.indexOf(b);
+    return (ai<0?999:ai)-(bi<0?999:bi);
+  });
+  const btns = sorted.map(r =>
+    `<button class="other-filter-btn" data-filter="${r}" onclick="filterOtherRoles('${r}')">${OTHER_FILTER_ROLE_LABELS[r]||r}</button>`
+  ).join('');
+  return `<div class="other-filter-bar"><button class="other-filter-btn active" data-filter="all" onclick="filterOtherRoles('all')">전체</button>${btns}</div>`;
+}
+
+function filterOtherRoles(filter) {
+  document.querySelectorAll('.other-filter-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.filter === filter);
+  });
+  document.querySelectorAll('.other-role-card-wrap').forEach(wrap => {
+    wrap.style.display = (filter === 'all' || wrap.dataset.role === filter) ? '' : 'none';
+  });
 }
 
 function renderFeedbackTransition() {
