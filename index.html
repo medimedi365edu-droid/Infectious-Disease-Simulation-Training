@@ -2647,11 +2647,12 @@ function calculateScore(checks, weights) {
 
 function saveManualScore(phaseNum, roleKey, checks) {
   if (myRole !== '모더레이터') return;
+  const safeKey = safeFirebaseKey(roleKey);
   const state = getState();
   if (!state.scores) state.scores = {};
   const pk = `phase${phaseNum}`;
   if (!state.scores[pk]) state.scores[pk] = {};
-  state.scores[pk][roleKey] = checks; // {kw0: true, kw1: false, ...}
+  state.scores[pk][safeKey] = checks; // {kw0: true, kw1: false, ...}
   saveState(state); broadcast('STATE_CHANGED', {});
   // 헤더 배지 즉시 갱신
   _refreshScoreBadge(phaseNum, roleKey, checks);
@@ -2701,8 +2702,9 @@ function buildManualScoreCard(phase, phaseNum, entry, savedChecks, isModerator, 
   const checks    = savedChecks || {};
   const st        = getState();
   const rk        = entry.key;
+  const rkSafe    = safeFirebaseKey(rk);
   const phaseKey  = `phase${phaseNum}`;
-  const isSubmitted = !!(st.scoreSubmitted?.[phaseKey]?.[rk]);
+  const isSubmitted = !!(st.scoreSubmitted?.[phaseKey]?.[rkSafe]);
   const weights   = getWeightsForRole(st, phaseNum, entry.role, keywords);
   const score     = calculateScore(checks, weights);
   const hasScore  = savedChecks !== null && savedChecks !== undefined;
@@ -2744,7 +2746,7 @@ function buildManualScoreCard(phase, phaseNum, entry, savedChecks, isModerator, 
     const checked = !!checks[`kw${i}`];
     const autoHit = kwMatch(entry.text, kw);
     if (isModerator) {
-      return `<div id="ckrow-${phaseNum}-${rk}-${i}" class="checklist-row${checked?' checked':''}${isSubmitted?' mod-readonly':''}" ${isSubmitted?'':'onclick="toggleCheck('+phaseNum+',\''+rk+'\','+i+','+keywords.length+')"'}>
+      return `<div id="ckrow-${phaseNum}-${rkSafe}-${i}" class="checklist-row${checked?' checked':''}${isSubmitted?' mod-readonly':''}" ${isSubmitted?'':'onclick="toggleCheck('+phaseNum+',\''+rkSafe+'\','+i+','+keywords.length+')"'}>
         <div class="checklist-box">${checked?'✓':''}</div>
         <div style="flex:1"><div class="kw-label">${escapeHtml(kw)}</div><div class="kw-sublabel">${isSubmitted?(checked?'✅ 확인됨':'—'):(autoHit?'🔍 텍스트에서 감지됨':'📝 내용 확인 후 체크')}</div></div>
         ${!isSubmitted ? `<div style="display:flex;align-items:center;gap:4px;flex-shrink:0" onclick="event.stopPropagation()">
@@ -2766,7 +2768,7 @@ function buildManualScoreCard(phase, phaseNum, entry, savedChecks, isModerator, 
   return `<div class="fb-card${isMe?' my-fb-card':''}">
     <div class="fb-card-header" style="display:flex;align-items:center;justify-content:space-between">
       <span>${ROLE_ICONS[entry.role]||''} ${entry.role}<span style="font-size:12px;color:#aed6f1;margin-left:4px">${nameTag}</span>${meTag}</span>
-      <span id="score-badge-${phaseNum}-${rk}" class="score-badge ${scoreClass}">${badgeText}</span>
+      <span id="score-badge-${phaseNum}-${rkSafe}" class="score-badge ${scoreClass}">${badgeText}</span>
     </div>
     <div class="fb-section"><h4>📝 작성 내용</h4>
       <p class="${!entry.text?'empty':''}">${entry.text?escapeHtml(entry.text):'작성 내용 없음'}</p>
@@ -2782,17 +2784,17 @@ function buildManualScoreCard(phase, phaseNum, entry, savedChecks, isModerator, 
       ${hasScore ? `
       <div class="manual-score-total">
         <div><div class="manual-score-label">${isModerator?'현재 점수':'모더레이터 채점'}</div></div>
-        <div id="score-num-${phaseNum}-${rk}" class="manual-score-num" style="color:${score>=80?'#1e8449':score>=50?'#b7950b':'#c0392b'}">${badgeText}</div>
+        <div id="score-num-${phaseNum}-${rkSafe}" class="manual-score-num" style="color:${score>=80?'#1e8449':score>=50?'#b7950b':'#c0392b'}">${badgeText}</div>
       </div>
-      <div class="score-bar-wrap"><div id="score-bar-${phaseNum}-${rk}" class="score-bar" style="width:${score}%;background:${barColor}"></div></div>
+      <div class="score-bar-wrap"><div id="score-bar-${phaseNum}-${rkSafe}" class="score-bar" style="width:${score}%;background:${barColor}"></div></div>
       ` : isModerator ? `<p style="font-size:11px;color:var(--muted);margin-top:8px">💡 키워드를 체크하면 점수가 자동 계산됩니다</p>` : ''}
     </div>
     ${isModerator ? `
     <div style="padding:10px 0 2px;display:flex;align-items:center;justify-content:flex-end;gap:8px">
       ${!isSubmitted
-        ? `<button onclick="submitScores(${phaseNum},'${rk}')" style="padding:7px 18px;background:#1a3a5c;color:white;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:background 0.2s" onmouseover="this.style.background='#244f7a'" onmouseout="this.style.background='#1a3a5c'">✅ 제출하기</button>`
+        ? `<button onclick="submitScores(${phaseNum},'${rkSafe}')" style="padding:7px 18px;background:#1a3a5c;color:white;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:background 0.2s" onmouseover="this.style.background='#244f7a'" onmouseout="this.style.background='#1a3a5c'">✅ 제출하기</button>`
         : `<span style="font-size:12px;font-weight:600;color:#27ae60">✅ 제출됨</span>
-           <button onclick="editScores(${phaseNum},'${rk}')" style="padding:7px 16px;background:white;color:#e67e22;border:2px solid #e67e22;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all 0.2s" onmouseover="this.style.background='#fef9f0'" onmouseout="this.style.background='white'">✏️ 수정하기</button>`
+           <button onclick="editScores(${phaseNum},'${rkSafe}')" style="padding:7px 16px;background:white;color:#e67e22;border:2px solid #e67e22;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all 0.2s" onmouseover="this.style.background='#fef9f0'" onmouseout="this.style.background='white'">✏️ 수정하기</button>`
       }
     </div>` : ''}
     <div class="fb-section"><h4>📌 모범 답안</h4><p style="font-size:12px;color:#555;line-height:1.7">${escapeHtml(mission.answer)}</p></div>
@@ -2830,7 +2832,7 @@ function buildInlineFeedbackHtml(phase, phaseResponses, participants) {
     if (!mission) return [];
     const entries = getRoleEntries(phaseResponses, participants, role);
     return entries.map(e => {
-      const savedChecks = phaseScores[e.key] ?? null;
+      const savedChecks = phaseScores[safeFirebaseKey(e.key)] ?? null;
       return buildManualScoreCard(phase, phaseNum, {...e, role}, savedChecks, isModerator);
     });
   }).join('');
@@ -2872,7 +2874,7 @@ function renderPhaseFeedback(body, state) {
     if (!mission) return [];
     const entries = getRoleEntries(phaseResponses, participants, role);
     return entries.map(e => {
-      const savedChecks = phaseScores[e.key] ?? null;
+      const savedChecks = phaseScores[safeFirebaseKey(e.key)] ?? null;
       return buildManualScoreCard(phase, phaseNum, {...e, role}, savedChecks, isModerator);
     });
   }).join('');
