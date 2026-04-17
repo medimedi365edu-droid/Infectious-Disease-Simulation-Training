@@ -1075,11 +1075,22 @@ function getScenarios() {
   return JSON.parse(JSON.stringify(DEFAULT_SCENARIOS));
 }
 
+// Firebase에는 JSON 문자열로 저장 (교장/교감 등 슬래시 키 오류 방지)
+function scenariosToFirebase(scenarios) {
+  return JSON.stringify(scenarios);
+}
+function scenariosFromFirebase(raw) {
+  if (!raw) return null;
+  if (typeof raw === 'string') { try { return JSON.parse(raw); } catch { return null; } }
+  if (Array.isArray(raw)) return raw; // 구버전 호환
+  return null;
+}
+
 function saveScenarios(scenarios) {
   localStorage.setItem('ttx_admin_scenarios', JSON.stringify(scenarios));
-  // Firebase에도 동시 저장 (다른 기기·브라우저에서도 반영)
+  // Firebase에도 동시 저장 (JSON 문자열로 저장해 슬래시 키 오류 방지)
   if (typeof db !== 'undefined') {
-    db.ref('settings/scenarios').set(JSON.parse(JSON.stringify(scenarios)))
+    db.ref('settings/scenarios').set(scenariosToFirebase(scenarios))
       .catch(e => console.warn('시나리오 Firebase 저장 실패:', e));
   }
 }
@@ -1243,9 +1254,9 @@ function selectScenario(id) {
       try {
         const scSnap = await db.ref('settings/scenarios').get();
         if (scSnap.exists()) {
-          const freshScenarios = scSnap.val();
-          localStorage.setItem('ttx_admin_scenarios', JSON.stringify(freshScenarios));
-          const found = freshScenarios.find(s => s.id === currentScenarioId);
+          const freshScenarios = scenariosFromFirebase(scSnap.val());
+          if (freshScenarios) localStorage.setItem('ttx_admin_scenarios', JSON.stringify(freshScenarios));
+          const found = freshScenarios && freshScenarios.find(s => s.id === currentScenarioId);
           if (found) {
             freshSc = found;
             ACTIVE_SCENARIO = found;
@@ -1429,7 +1440,7 @@ async function createRoom(scenarioId, groupNum) {
   _cachedState = normalizeState(state); // 즉시 캐시
   // 방 생성 시 로컬 시나리오를 Firebase에 즉시 동기화
   // (localStorage에만 있던 커스텀 시나리오를 참가자들도 받을 수 있게)
-  await db.ref('settings/scenarios').set(JSON.parse(JSON.stringify(getScenarios()))).catch(() => {});
+  await db.ref('settings/scenarios').set(scenariosToFirebase(getScenarios())).catch(() => {});
   await dbRef.set(state);
   // URL에 roomCode 반영
   const url = new URL(location.href);
@@ -1455,9 +1466,9 @@ async function joinRoom(code) {
   try {
     const scSnap = await db.ref('settings/scenarios').get();
     if (scSnap.exists()) {
-      const freshScenarios = scSnap.val();
-      localStorage.setItem('ttx_admin_scenarios', JSON.stringify(freshScenarios));
-      const sc = freshScenarios.find(s => s.id === currentScenarioId);
+      const freshScenarios = scenariosFromFirebase(scSnap.val());
+      if (freshScenarios) localStorage.setItem('ttx_admin_scenarios', JSON.stringify(freshScenarios));
+      const sc = freshScenarios && freshScenarios.find(s => s.id === currentScenarioId);
       if (sc) { ACTIVE_SCENARIO = sc; ACTIVE_PHASES = sc.phases; }
     }
   } catch {}
@@ -3590,7 +3601,7 @@ function saveAdminScenario(idx) {
 
   // Firebase에 직접 저장하고 결과 확인
   if (typeof db !== 'undefined') {
-    db.ref('settings/scenarios').set(JSON.parse(JSON.stringify(scenarios)))
+    db.ref('settings/scenarios').set(scenariosToFirebase(scenarios))
       .then(() => showToast('✅ 서버 저장 완료! 모든 기기에 반영됩니다.'))
       .catch(e => {
         console.error('Firebase 시나리오 저장 실패:', e);
@@ -3695,7 +3706,8 @@ window.addEventListener('load', async () => {
   db.ref('settings/scenarios').on('value', (snap) => {
     if (!snap.exists()) return;
     try {
-      const scenarios = snap.val();
+      const scenarios = scenariosFromFirebase(snap.val());
+      if (!scenarios) return;
       localStorage.setItem('ttx_admin_scenarios', JSON.stringify(scenarios));
 
       // 홈 화면 시나리오 카드 갱신
