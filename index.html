@@ -1070,7 +1070,15 @@ const DEFAULT_SCENARIOS = [
 function getScenarios() {
   try {
     const saved = localStorage.getItem('ttx_admin_scenarios');
-    if (saved) return JSON.parse(saved);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length) return parsed;
+      // 이중 직렬화된 경우 한 번 더 파싱
+      if (typeof parsed === 'string') {
+        const inner = JSON.parse(parsed);
+        if (Array.isArray(inner) && inner.length) return inner;
+      }
+    }
   } catch {}
   return JSON.parse(JSON.stringify(DEFAULT_SCENARIOS));
 }
