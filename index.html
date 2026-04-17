@@ -2016,7 +2016,8 @@ function renderLobby(body, state) {
     ).join('');
 
   if (myRole === '모더레이터') {
-    body.innerHTML = `<div style="flex:1"><div class="lobby-card" style="margin:0 auto">
+    const lobbyRolePanel = renderRoleReassignPanel(state);
+    body.innerHTML = `<div style="flex:1"><div class="lobby-card" style="margin:0 auto;max-width:520px">
       <div style="font-size:48px;margin-bottom:12px">🎙️</div>
       <h2>진행자 대기실</h2>
       <p>참가자들이 각자의 역할로 접속하면 훈련을 시작해 주세요.</p>
@@ -2027,7 +2028,8 @@ function renderLobby(body, state) {
           ${pList || '<div style="padding:16px;text-align:center;color:var(--muted);font-size:13px">아직 참가자가 없습니다</div>'}
         </div>
       </div>
-      <button onclick="showQRModal(roomCode)" style="margin-top:16px;width:100%;padding:12px;background:white;border:2px solid #1a3a5c;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;color:#1a3a5c;transition:all 0.2s" onmouseover="this.style.background='#f0f6ff'" onmouseout="this.style.background='white'">
+      <div style="margin-top:16px">${lobbyRolePanel}</div>
+      <button onclick="showQRModal(roomCode)" style="margin-top:4px;width:100%;padding:12px;background:white;border:2px solid #1a3a5c;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;color:#1a3a5c;transition:all 0.2s" onmouseover="this.style.background='#f0f6ff'" onmouseout="this.style.background='white'">
         📱 QR 코드 표시하기
       </button>
       <button class="btn-next-phase" style="margin-top:10px;width:100%;padding:14px" onclick="startPhase(1)">
