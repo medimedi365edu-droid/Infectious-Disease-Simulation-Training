@@ -789,18 +789,22 @@
       <h1 id="login-scenario-title">감염병 위기대응<br>협력 훈련</h1>
       <p>Tabletop Exercise · 감염병 대응 모의훈련</p>
     </div>
+    <div class="form-group" id="room-code-group">
+      <label>방 코드 입력</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" id="room-code-input" placeholder="예: INFL-3조-A4F2" maxlength="20" style="text-transform:uppercase;flex:1" oninput="this.value=this.value.toUpperCase();onRoomCodeInput()">
+        <button type="button" id="room-code-verify-btn" onclick="verifyRoomCode()" style="padding:0 16px;height:44px;background:#1a3a5c;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;transition:background 0.2s" onmouseover="this.style.background='#244f7a'" onmouseout="this.style.background='#1a3a5c'">확인</button>
+      </div>
+      <div id="room-code-status" style="margin-top:6px;font-size:12px;color:var(--muted)">방 코드를 입력하면 조·역할이 자동으로 설정됩니다.</div>
+    </div>
     <div class="form-group">
       <label>조 선택</label>
       <div class="group-grid" id="group-grid"></div>
     </div>
-    <p class="session-hint" id="session-hint-text">※ 모더레이터가 QR 코드나 링크를 공유하면 자동으로 방에 연결됩니다</p>
+    <p class="session-hint" id="session-hint-text" style="display:none">※ 모더레이터가 QR 코드나 링크를 공유하면 자동으로 방에 연결됩니다</p>
     <div class="form-group">
       <label>이름 (성명)</label>
       <input type="text" id="input-name" placeholder="예: 김선생" maxlength="20">
-    </div>
-    <div class="form-group" id="room-code-group" style="display:none">
-      <label>방 코드 입력 (QR 대신 직접 입력)</label>
-      <input type="text" id="room-code-input" placeholder="예: INFL-3조-A4F2" maxlength="20" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()">
     </div>
     <div class="form-group">
       <label>역할 선택</label>
@@ -1784,17 +1788,61 @@ document.querySelectorAll('.role-btn').forEach(btn => {
     document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('selected'));
     btn.classList.add('selected');
     selectedRole = btn.dataset.role;
-    // 참가자이고 URL에 room 없으면 방 코드 입력란 표시
-    const urlRoom = new URLSearchParams(location.search).get('room');
     const codeGroup = document.getElementById('room-code-group');
-    if (codeGroup) codeGroup.style.display = (selectedRole !== '모더레이터' && !urlRoom) ? '' : 'none';
+    if (codeGroup) codeGroup.style.display = selectedRole === '모더레이터' ? 'none' : '';
     updateJoinBtn();
   });
 });
 document.getElementById('input-name').addEventListener('input', updateJoinBtn);
 function updateJoinBtn() {
   const name = document.getElementById('input-name').value.trim();
-  document.getElementById('btn-join').disabled = qrLobbyMode ? !name : !(name && selectedRole && myGroup);
+  if (qrLobbyMode) { document.getElementById('btn-join').disabled = !name; return; }
+  const urlRoom = new URLSearchParams(location.search).get('room');
+  const manualRoom = document.getElementById('room-code-input')?.value.trim();
+  const hasRoom = !!(urlRoom || manualRoom);
+  const isMod = selectedRole === '모더레이터';
+  document.getElementById('btn-join').disabled = !(name && selectedRole && myGroup && (isMod || hasRoom));
+}
+
+let _verifiedRoomCode = '';
+function onRoomCodeInput() {
+  _verifiedRoomCode = '';
+  const status = document.getElementById('room-code-status');
+  if (status) { status.style.color = 'var(--muted)'; status.textContent = '방 코드를 입력하면 조·역할이 자동으로 설정됩니다.'; }
+  updateJoinBtn();
+}
+async function verifyRoomCode() {
+  const input = document.getElementById('room-code-input');
+  const code = input ? input.value.trim().toUpperCase() : '';
+  const status = document.getElementById('room-code-status');
+  const btn = document.getElementById('room-code-verify-btn');
+  if (!code) { if (status) { status.style.color = '#c0392b'; status.textContent = '방 코드를 입력해 주세요.'; } return; }
+  if (btn) { btn.disabled = true; btn.textContent = '확인 중...'; }
+  try {
+    const snap = await getRoomRef(code).get();
+    if (!snap.exists()) {
+      if (status) { status.style.color = '#c0392b'; status.textContent = '❌ 방을 찾을 수 없습니다. 코드를 다시 확인해 주세요.'; }
+    } else {
+      _verifiedRoomCode = code;
+      const data = snap.val();
+      const parts = code.split('-');
+      const grpNum = parts.length >= 2 ? parseInt(parts[1].replace('조','')) : 0;
+      if (grpNum) selectGroup(grpNum);
+      const curPhase = data.currentPhase ?? 0;
+      const phaseText = curPhase === 0 ? '대기실' : `${curPhase}단계 진행 중`;
+      if (status) { status.style.color = '#27ae60'; status.textContent = `✅ 방 확인 완료 — ${grpNum}조 · ${phaseText}`; }
+      // URL에 room 파라미터 반영
+      const url = new URL(location.href);
+      url.searchParams.set('room', code);
+      history.replaceState({}, '', url.toString());
+      const clearBtn = document.getElementById('btn-clear-room');
+      if (clearBtn) clearBtn.style.display = 'block';
+    }
+  } catch(e) {
+    if (status) { status.style.color = '#c0392b'; status.textContent = '❌ 연결 오류가 발생했습니다. 다시 시도해 주세요.'; }
+  }
+  if (btn) { btn.disabled = false; btn.textContent = '확인'; }
+  updateJoinBtn();
 }
 document.getElementById('btn-join').addEventListener('click', async () => {
   const name = document.getElementById('input-name').value.trim();
@@ -1829,15 +1877,15 @@ document.getElementById('btn-join').addEventListener('click', async () => {
         await createRoom(currentScenarioId, myGroup);
       }
     } else {
-      // 참가자: URL에 room 파라미터가 있으면 그 방에, 없으면 에러
+      // 참가자: URL 또는 직접 입력한 방 코드로 참가
       if (!urlRoom) {
-        alert('QR 코드나 링크를 통해 참가하거나, 모더레이터에게 방 링크를 받으세요.');
+        alert('방 코드를 입력하고 [확인] 버튼을 눌러 방을 확인한 후 참가해 주세요.');
         btnJoin.disabled = false; btnJoin.textContent = '훈련 참가';
         return;
       }
       const ok = await joinRoom(urlRoom);
       if (!ok) {
-        alert('방을 찾을 수 없습니다. QR 코드를 다시 스캔해 주세요.');
+        alert('방을 찾을 수 없습니다. 방 코드를 다시 확인해 주세요.');
         btnJoin.disabled = false; btnJoin.textContent = '훈련 참가';
         return;
       }
@@ -3826,6 +3874,9 @@ window.addEventListener('load', async () => {
   const urlParams = new URLSearchParams(location.search);
   const roomParam = urlParams.get('room');
   if (roomParam) {
+    // 방 코드 입력란에 자동 채우기
+    const rcInput = document.getElementById('room-code-input');
+    if (rcInput) rcInput.value = roomParam.toUpperCase();
     // room 코드에서 시나리오 ID, 그룹 번호 파싱 시도
     // 형식: INFL-3조-XXXX
     const parts = roomParam.split('-');
@@ -3848,7 +3899,11 @@ window.addEventListener('load', async () => {
             if (snap.exists()) currentPhase = snap.val().currentPhase ?? 0;
           } catch {}
 
-          const hint = document.getElementById('session-hint-text');
+          const rcInput = document.getElementById('room-code-input');
+          if (rcInput) { rcInput.value = roomParam; rcInput.readOnly = true; }
+          const status = document.getElementById('room-code-status');
+          const codeGroup = document.getElementById('room-code-group');
+
           if (currentPhase === 0) {
             // ── 대기실: 역할·조 선택 숨기고 이름만 입력 ──
             qrLobbyMode = true;
@@ -3856,18 +3911,21 @@ window.addEventListener('load', async () => {
             if (roleWrap) roleWrap.style.display = 'none';
             const groupWrap = document.getElementById('group-grid')?.closest('.form-group');
             if (groupWrap) groupWrap.style.display = 'none';
-            if (hint) hint.innerHTML = `
+            if (codeGroup) codeGroup.style.display = 'none'; // 대기실은 방코드 자동 연결
+            const hint = document.getElementById('session-hint-text');
+            if (hint) { hint.style.display = ''; hint.innerHTML = `
               <div style="background:#e8f4fd;border:1px solid #3498db;border-radius:8px;padding:12px 14px;text-align:left;line-height:1.6">
                 <strong>📌 ${grpNum}조 · 방 코드: ${roomParam}</strong><br>
                 <span style="font-size:13px;color:#444">이름만 입력하고 참가하세요.<br>모더레이터가 역할을 배정해 드립니다.</span>
-              </div>`;
+              </div>`; }
             updateJoinBtn();
           } else if (currentPhase > 0) {
             // ── 단계 진행 중: 역할 선택 필요 ──
-            if (hint) hint.innerHTML = `✅ 방 코드: <strong>${roomParam}</strong> — 현재 <strong>${currentPhase}단계</strong> 진행 중입니다.<br><small style="color:#e67e22">해당 단계 역할을 선택한 후 참가하세요.</small>`;
+            if (status) { status.style.color = '#27ae60'; status.textContent = `✅ 방 확인 완료 — ${grpNum}조 · ${currentPhase}단계 진행 중`; }
+            if (rcInput) { const vBtn = document.getElementById('room-code-verify-btn'); if (vBtn) vBtn.style.display = 'none'; }
           } else {
-            // 방 없음 / 오류: 기존 안내
-            if (hint) hint.innerHTML = `✅ 방 코드: <strong>${roomParam}</strong> — 이름과 역할을 선택 후 참가해 주세요.<br><small style="color:#e67e22">※ 모더레이터로 재접속하려면 역할에서 모더레이터를 선택하세요.</small>`;
+            // 방 없음 / 오류
+            if (status) { status.style.color = '#e67e22'; status.textContent = `방 코드: ${roomParam} — 이름과 역할을 선택 후 참가해 주세요.`; }
           }
         })();
       }
