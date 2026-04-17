@@ -1136,39 +1136,6 @@ function getRolesUsedInScenario(scenario) {
 function getBaseRole(role) { return normalizeRole(role); }
 // Firebase 키에 사용 불가능한 / 를 | 로 치환 (교장/교감 등 대응)
 function safeFirebaseKey(str) { return String(str).replace(/\//g, '|'); }
-// Firebase 저장 전 시나리오 데이터의 missions 키에서 금지 문자 제거
-// Firebase 키 금지 문자: . # $ / [ ]
-function sanitizeScenarioForFirebase(sc) {
-  if (!sc) return sc;
-  const clone = JSON.parse(JSON.stringify(sc));
-  clone.phases = (clone.phases || []).map(phase => {
-    if (phase.missions && typeof phase.missions === 'object') {
-      const safeMissions = {};
-      Object.entries(phase.missions).forEach(([key, val]) => {
-        safeMissions[safeFirebaseKey(key)] = val;
-      });
-      phase.missions = safeMissions;
-    }
-    return phase;
-  });
-  return clone;
-}
-// Firebase에서 읽은 시나리오의 missions 키를 원본으로 복원 (| → /)
-function restoreScenarioFromFirebase(sc) {
-  if (!sc) return sc;
-  const clone = JSON.parse(JSON.stringify(sc));
-  clone.phases = (clone.phases || []).map(phase => {
-    if (phase.missions && typeof phase.missions === 'object') {
-      const restoredMissions = {};
-      Object.entries(phase.missions).forEach(([key, val]) => {
-        restoredMissions[key.replace(/\|/g, '/')] = val;
-      });
-      phase.missions = restoredMissions;
-    }
-    return phase;
-  });
-  return clone;
-}
 // 개인 응답 키: "역할:이름" (/ 치환 적용)
 function getRKey() { return `${safeFirebaseKey(myRole)}:${myName}`; }
 // 특정 역할의 모든 참가자 응답 목록 반환
@@ -1263,44 +1230,21 @@ function selectScenario(id) {
       const roomState = snap.val();
       const curPhase = roomState.currentPhase || 0;
 
-      // ★ Firebase에 저장된 scenarioData 우선 사용 (관리자 편집 반영, | → / 복원)
-      const scToUse = (roomState.scenarioData && roomState.scenarioData.id)
-        ? restoreScenarioFromFirebase(roomState.scenarioData)
-        : sc;
-      if (scToUse && scToUse !== sc) {
-        ACTIVE_SCENARIO = scToUse;
-        ACTIVE_PHASES = scToUse.phases;
-        // 단계 탭 레이블 갱신
-        ACTIVE_PHASES.forEach((p, i) => {
-          const el = document.getElementById(`step-${i + 1}`);
-          if (el) el.innerHTML = `<span class="step-num">${i + 1}</span>${p.emoji} ${p.title}`;
-        });
-        // 시나리오 전체 역할 다시 필터링
-        const usedRoles2 = getRolesUsedInScenario(scToUse);
-        document.querySelectorAll('.role-btn:not(.moderator-btn)').forEach(btn => {
-          const role = btn.dataset.role;
-          if (!role) return;
-          btn.querySelectorAll('.new-badge').forEach(el => el.remove());
-          btn.classList.remove('disabled');
-          btn.classList.toggle('disabled', !usedRoles2.has(normalizeRole(role)));
-          btn.style.display = '';
-        });
-      }
-      const activeScenario = scToUse || sc;
-
       // 로비(0단계) 또는 1단계: 1단계 역할만 표시 (팝업 없음)
       // 2단계 이후 중간 입장: 해당 단계 역할 표시 + 팝업
       const targetPhaseIdx = (curPhase === 0)
-        ? 0
-        : (roomState.showingFeedback && curPhase < activeScenario.phases.length)
+        ? 0 // 로비면 1단계 기준
+        : (roomState.showingFeedback && curPhase < sc.phases.length)
           ? curPhase
           : curPhase - 1;
-      const targetPhase = activeScenario.phases[targetPhaseIdx];
+      const targetPhase = sc.phases[targetPhaseIdx];
       if (!targetPhase) return;
 
       const activeRoles = getActiveRoles(targetPhase);
-      const phase1RolesList = getActiveRoles(activeScenario.phases[0]);
+      const phase1RolesList = getActiveRoles(sc.phases[0]);
 
+      // 1단계 진입: 활성 역할만 남기고 나머지 숨김 (팝업 없음)
+      // 2단계 이후 중간 입장: 팝업 표시
       const isMidJoin = curPhase >= 2 || (roomState.showingFeedback && curPhase >= 1);
 
       document.querySelectorAll('.role-btn:not(.moderator-btn)').forEach(btn => {
@@ -1323,9 +1267,10 @@ function selectScenario(id) {
       });
 
       if (isMidJoin) {
+        // 2단계 이후 중간 입장: 배너 + 팝업 표시
         const hint = document.getElementById('session-hint-text');
         if (hint) {
-          const phaseLabel = (roomState.showingFeedback && curPhase < activeScenario.phases.length)
+          const phaseLabel = (roomState.showingFeedback && curPhase < sc.phases.length)
             ? `${curPhase + 1}단계`
             : `${curPhase}단계`;
           hint.className = 'session-hint mid-join-notice';
@@ -1335,7 +1280,7 @@ function selectScenario(id) {
             `<small style="opacity:0.8">💡 <strong>신규</strong> 표시는 이번 단계에서 새로 참여하는 역할입니다.</small>`;
           hint.style.borderLeftColor = targetPhase.color;
         }
-        showMidJoinModal(targetPhase, activeRoles, phase1RolesList, curPhase, roomState.showingFeedback, activeScenario.phases.length);
+        showMidJoinModal(targetPhase, activeRoles, phase1RolesList, curPhase, roomState.showingFeedback, sc.phases.length);
       }
     }).catch(() => {});
   }
@@ -1457,10 +1402,6 @@ async function createRoom(scenarioId, groupNum) {
   state.roomCode = roomCode;
   state.groupCount = getGroupCount();
   state.createdAt = Date.now();
-  // ★ 관리자가 편집한 시나리오 전체를 Firebase에 저장 (missions 키 안전화 적용)
-  const scenarios = getScenarios();
-  const sc = scenarios.find(s => s.id === scenarioId);
-  if (sc) state.scenarioData = sanitizeScenarioForFirebase(sc);
   _cachedState = normalizeState(state); // 즉시 캐시
   await dbRef.set(state);
   // URL에 roomCode 반영
@@ -1483,15 +1424,8 @@ async function joinRoom(code) {
   myGroup = data.groupNum || '';
   STORAGE_KEY = `ttx_${currentScenarioId}_g${myGroup}_v1`;
   CHANNEL_NAME = `ttx_${currentScenarioId}_g${myGroup}_ch`;
-  // ★ Firebase에 저장된 scenarioData 우선 사용 (관리자 편집 반영, | → / 복원)
-  //    없으면 localStorage, 그것도 없으면 기본값 fallback
-  let sc = null;
-  if (data.scenarioData && data.scenarioData.id) {
-    sc = restoreScenarioFromFirebase(data.scenarioData);
-  } else {
-    const scenarios = getScenarios();
-    sc = scenarios.find(s => s.id === currentScenarioId) || null;
-  }
+  const scenarios = getScenarios();
+  const sc = scenarios.find(s => s.id === currentScenarioId);
   if (sc) {
     ACTIVE_SCENARIO = sc;
     ACTIVE_PHASES = sc.phases;
@@ -3609,12 +3543,6 @@ function saveAdminScenario(idx) {
   });
 
   saveScenarios(scenarios);
-  // ★ 현재 열린 방의 시나리오와 같으면 Firebase에도 즉시 반영 (참가자 실시간 동기화)
-  if (typeof dbRef !== 'undefined' && dbRef && typeof roomCode !== 'undefined' && roomCode) {
-    if (sc.id === currentScenarioId) {
-      dbRef.update({ scenarioData: sanitizeScenarioForFirebase(sc) }).catch(() => {});
-    }
-  }
   showToast();
   renderAdminSidebar();
 }
