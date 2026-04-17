@@ -930,7 +930,7 @@ const DEFAULT_SCENARIOS = [
     name: '인플루엔자',
     emoji: '🤧',
     color: '#1a3a5c',
-    description: '계절성 인플루엔자 유증상자 발견부터 집단 유행까지 3단계 대응',
+    description: '계절성 인플루엔자 유증상자 발견부터 집단 유행까지 3단계 대응 훈련',
     phases: [
       {
         id: 1, title: '유증상자 발견', emoji: '🛑', color: '#e67e22', colorClass: 'phase-1-color',
@@ -2056,8 +2056,19 @@ function renderLobby(body, state) {
       <button onclick="showQRModal(roomCode)" style="margin-top:4px;width:100%;padding:12px;background:white;border:2px solid #1a3a5c;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;color:#1a3a5c;transition:all 0.2s" onmouseover="this.style.background='#f0f6ff'" onmouseout="this.style.background='white'">
         📱 QR 코드 표시하기
       </button>
-      <button class="btn-next-phase" style="margin-top:10px;width:100%;padding:14px" onclick="startPhase(1)">
-        ▶ 훈련 시작 — 1단계: ${ACTIVE_PHASES[0] ? ACTIVE_PHASES[0].title : ''}
+      <div style="margin-top:14px;background:#f8f9fa;border:1px solid var(--border);border-radius:10px;padding:14px">
+        <div style="font-size:13px;font-weight:700;color:#1a3a5c;margin-bottom:10px">⏱ 1단계 시간 설정</div>
+        <div style="display:flex;align-items:center;gap:8px;justify-content:center">
+          <button onclick="lobbyChangeDuration(-1)" style="width:34px;height:34px;border-radius:50%;border:1.5px solid var(--border);background:white;font-size:18px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#555;font-family:inherit">−</button>
+          <div style="display:flex;align-items:center;gap:4px">
+            <input id="lobby-duration-input" type="number" value="5" min="1" max="60" style="width:52px;text-align:center;font-size:20px;font-weight:700;border:1.5px solid var(--border);border-radius:8px;padding:4px 6px;font-family:inherit;color:#1a3a5c">
+            <span style="font-size:14px;color:var(--muted);font-weight:600">분</span>
+          </div>
+          <button onclick="lobbyChangeDuration(1)" style="width:34px;height:34px;border-radius:50%;border:1.5px solid var(--border);background:white;font-size:18px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#555;font-family:inherit">+</button>
+        </div>
+      </div>
+      <button class="btn-next-phase" style="margin-top:10px;width:100%;padding:14px" onclick="startPhaseWithTimer(1)">
+        ▶ 1단계 시작 — ${ACTIVE_PHASES[0] ? ACTIVE_PHASES[0].title : ''}
       </button>
       <button onclick="leaveToLogin()" style="margin-top:10px;width:100%;padding:11px;background:none;border:1px solid var(--border);border-radius:8px;font-size:14px;color:var(--muted);cursor:pointer;font-family:inherit;transition:all 0.2s" onmouseover="this.style.borderColor='var(--primary)';this.style.color='var(--primary)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">← 조 선택 화면으로 돌아가기</button>
     </div></div>`;
@@ -3015,6 +3026,35 @@ function renderFeedbackTransition() {
 // ═══════════════════════════════════════════════════════
 //  ACTIONS
 // ═══════════════════════════════════════════════════════
+function lobbyChangeDuration(delta) {
+  const inp = document.getElementById('lobby-duration-input');
+  if (!inp) return;
+  const cur = parseInt(inp.value) || 5;
+  inp.value = Math.max(1, Math.min(60, cur + delta));
+}
+function startPhaseWithTimer(phaseNum) {
+  if (myRole !== '모더레이터') return;
+  const inp = document.getElementById('lobby-duration-input');
+  const minutes = inp ? Math.max(1, Math.min(60, parseInt(inp.value) || 5)) : 5;
+  const state = getState();
+  if (state.roleAnnouncement && state.roleAnnouncement.assignments) {
+    Object.entries(state.roleAnnouncement.assignments).forEach(([name, newRole]) => {
+      if (state.participants && state.participants[name]) state.participants[name].role = newRole;
+    });
+    state.roleAnnouncement = null;
+  }
+  state.currentPhase = phaseNum;
+  state.phaseDuration = minutes * 60;
+  state.phaseStartTime = Date.now();
+  state.timerRunning = true; state.timerPaused = false; state.timerPausedRemaining = null;
+  state.showingFeedback = false;
+  if (!state.roleHistory) state.roleHistory = {};
+  state.roleHistory[`phase${phaseNum}`] = {};
+  Object.entries(state.participants || {}).forEach(([name, info]) => {
+    state.roleHistory[`phase${phaseNum}`][name] = info.role;
+  });
+  saveState(state); broadcast('PHASE_CHANGE', { phase: phaseNum }); renderExercise();
+}
 function startPhase(phaseNum, durationSeconds) {
   if (myRole !== '모더레이터') return;
   const state = getState();
@@ -3201,12 +3241,20 @@ function prevPhase() {
     state.showingFeedback = false; saveState(state); broadcast('PHASE_CHANGE', {}); renderExercise();
   } else {
     const prev = state.currentPhase - 1;
-    if (prev < 1) return; // 1단계 미만으로는 돌아갈 수 없음
-    // 이전 단계의 피드백(채점) 화면을 바로 보여줌 → 기록 확인 가능
-    state.currentPhase = prev; state.timerRunning = false;
-    state.timerPaused = false; state.timerPausedRemaining = null;
-    state.phaseStartTime = null; state.showingFeedback = true;
-    saveState(state); broadcast('PHASE_CHANGE', { phase: prev }); renderExercise();
+    if (prev < 0) return;
+    if (prev === 0) {
+      // 1단계 → 대기실로 돌아가기
+      state.currentPhase = 0; state.timerRunning = false;
+      state.timerPaused = false; state.timerPausedRemaining = null;
+      state.phaseStartTime = null; state.showingFeedback = false;
+      saveState(state); broadcast('PHASE_CHANGE', { phase: 0 }); renderExercise();
+    } else {
+      // 이전 단계의 피드백(채점) 화면을 바로 보여줌 → 기록 확인 가능
+      state.currentPhase = prev; state.timerRunning = false;
+      state.timerPaused = false; state.timerPausedRemaining = null;
+      state.phaseStartTime = null; state.showingFeedback = true;
+      saveState(state); broadcast('PHASE_CHANGE', { phase: prev }); renderExercise();
+    }
   }
 }
 function goBackFromFeedback() {
