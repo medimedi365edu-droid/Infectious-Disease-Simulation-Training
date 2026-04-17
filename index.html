@@ -1067,12 +1067,7 @@ const DEFAULT_SCENARIOS = [
 // ═══════════════════════════════════════════════════════
 //  SCENARIO MANAGEMENT
 // ═══════════════════════════════════════════════════════
-// 메모리 캐시 (Firebase 로드 후 채워짐)
-let _scenariosCache = null;
-
 function getScenarios() {
-  if (_scenariosCache) return _scenariosCache;
-  // Firebase 로드 전 fallback: localStorage → DEFAULT
   try {
     const saved = localStorage.getItem('ttx_admin_scenarios');
     if (saved) return JSON.parse(saved);
@@ -1081,31 +1076,7 @@ function getScenarios() {
 }
 
 function saveScenarios(scenarios) {
-  _scenariosCache = scenarios;
   localStorage.setItem('ttx_admin_scenarios', JSON.stringify(scenarios));
-  // Firebase에도 동기화
-  if (typeof db !== 'undefined') {
-    db.ref('settings/scenarios').set(JSON.parse(JSON.stringify(scenarios)))
-      .catch(e => console.warn('Firebase 시나리오 저장 실패:', e));
-  }
-}
-
-// Firebase에서 시나리오 로드 (앱 시작 시 1회 호출)
-async function loadScenariosFromFirebase() {
-  try {
-    const snap = await db.ref('settings/scenarios').get();
-    if (snap.exists()) {
-      _scenariosCache = snap.val();
-      localStorage.setItem('ttx_admin_scenarios', JSON.stringify(_scenariosCache));
-    } else {
-      // Firebase에 없으면 기본값으로 초기화 후 저장
-      _scenariosCache = JSON.parse(JSON.stringify(DEFAULT_SCENARIOS));
-      await db.ref('settings/scenarios').set(_scenariosCache);
-    }
-  } catch(e) {
-    console.warn('Firebase 시나리오 로드 실패, 로컬 사용:', e);
-    _scenariosCache = getScenarios();
-  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -3616,13 +3587,7 @@ function changeAdminPassword() {
 
 function resetToDefault() {
   if (confirm('모든 시나리오를 기본값으로 초기화할까요?\n커스텀 시나리오는 모두 삭제됩니다.')) {
-    const defaults = JSON.parse(JSON.stringify(DEFAULT_SCENARIOS));
-    _scenariosCache = defaults;
-    localStorage.setItem('ttx_admin_scenarios', JSON.stringify(defaults));
-    if (typeof db !== 'undefined') {
-      db.ref('settings/scenarios').set(defaults)
-        .catch(e => console.warn('Firebase 초기화 저장 실패:', e));
-    }
+    localStorage.removeItem('ttx_admin_scenarios');
     renderAdminSidebar();
     adminSelectedScenarioIndex = -1;
     document.getElementById('admin-edit-area').innerHTML = `<div class="admin-empty"><span class="icon">📋</span><p>기본값으로 초기화되었습니다.</p></div>`;
@@ -3650,8 +3615,9 @@ function escAttr(str) {
 }
 
 // ═══════════════════════════════════════════════════════
-//  INIT — renderHomeScenarios()는 window.onload에서 Firebase 로드 후 실행
+//  INIT
 // ═══════════════════════════════════════════════════════
+renderHomeScenarios();
 
 // Ctrl+S / Cmd+S 단축키로 관리자 저장
 document.addEventListener('keydown', function(e) {
@@ -3665,15 +3631,11 @@ document.addEventListener('keydown', function(e) {
 });
 
 window.addEventListener('load', async () => {
-  // Firebase에서 groupCount + 시나리오 로드
+  // Firebase 전역 설정에서 groupCount 로드
   try {
     const snap = await db.ref('settings/groupCount').get();
     if (snap.exists()) localStorage.setItem('ttx_group_count', String(snap.val()));
   } catch(e) {}
-
-  // 시나리오를 Firebase에서 먼저 로드한 뒤 홈 화면 렌더링
-  await loadScenariosFromFirebase();
-  renderHomeScenarios();
 
   // URL에 room 파라미터가 있으면 바로 로그인 화면으로 이동
   const urlParams = new URLSearchParams(location.search);
