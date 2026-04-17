@@ -1427,6 +1427,9 @@ async function createRoom(scenarioId, groupNum) {
   state.groupCount = getGroupCount();
   state.createdAt = Date.now();
   _cachedState = normalizeState(state); // 즉시 캐시
+  // 방 생성 시 로컬 시나리오를 Firebase에 즉시 동기화
+  // (localStorage에만 있던 커스텀 시나리오를 참가자들도 받을 수 있게)
+  await db.ref('settings/scenarios').set(JSON.parse(JSON.stringify(getScenarios()))).catch(() => {});
   await dbRef.set(state);
   // URL에 roomCode 반영
   const url = new URL(location.href);
