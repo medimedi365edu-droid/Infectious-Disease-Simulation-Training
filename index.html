@@ -930,7 +930,7 @@ const DEFAULT_SCENARIOS = [
     name: '인플루엔자',
     emoji: '🤧',
     color: '#1a3a5c',
-    description: '계절성 인플루엔자 유증상자 발견부터 집단 유행까지 3단계 대응 훈련',
+    description: '계절성 인플루엔자 유증상자 발견부터 집단 유행까지 3단계 대응',
     phases: [
       {
         id: 1, title: '유증상자 발견', emoji: '🛑', color: '#e67e22', colorClass: 'phase-1-color',
@@ -1970,6 +1970,7 @@ function updateTimerDisplay() {
   el.classList.toggle('urgent', remaining <= 60 && remaining > 0);
   if (remaining === 0 && myRole === '모더레이터' && state.timerRunning && !state.timerPaused) {
     const s = getState(); s.timerRunning = false; s.showingFeedback = true;
+    autoSubmitAllScores(s);
     saveState(s); broadcast('PHASE_CHANGE', {});
   }
 }
@@ -2484,7 +2485,7 @@ function renderPhase(body, state) {
             <strong>참고 키워드:</strong> ${myMission.keywords.map(k=>`<span class="kw-tag">${k}</span>`).join('')}
           </div>
           <div class="textarea-wrap">
-            <textarea class="response-textarea" id="my-textarea" placeholder="여기에 조치 사항을 자유롭게 작성하세요..." ${submitted?'disabled':''}>${escapeHtml(myResponse)}</textarea>
+            <textarea class="response-textarea" id="my-textarea" placeholder="여기에 조치 사항을 자유롭게 작성하세요..." ${submitted?'disabled':''}>${escapeForTextarea(myResponse)}</textarea>
           </div>
           <div class="submit-row">
             ${submitted
@@ -2586,7 +2587,7 @@ function renderProxySection(phase, phaseResponses, participants) {
         <div class="proxy-role-title">${ROLE_ICONS[role]||''} ${role} <span style="font-size:11px;color:var(--muted);font-weight:400">(미참여 — 대리 입력)</span></div>
         <div class="proxy-mission-hint">💬 ${mission.prompt}</div>
         ${answerBlock}
-        <textarea class="proxy-textarea" id="${textareaId}" placeholder="해당 역할의 답변을 대신 입력하세요...">${escapeHtml(text)}</textarea>
+        <textarea class="proxy-textarea" id="${textareaId}" placeholder="해당 역할의 답변을 대신 입력하세요...">${escapeForTextarea(text)}</textarea>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <button class="btn-proxy-submit" onclick="submitProxyResponse('${role}', '${textareaId}')">📝 대리 제출</button>
         </div>
@@ -2920,15 +2921,27 @@ function renderPhaseFeedback(body, state) {
     participants = currentParticipants;
   }
 
-  const cards = sortRolesForDisplay(getActiveRoles(phase).filter(r => r !== '모더레이터'), participants).flatMap(role => {
+  const FEEDBACK_ROLE_ORDER = ['담임교사', '보건(담당)교사', '영양(교)사', '행정실', '교장/교감', '교육(지원)청', '유관기관'];
+  const activeRolesF = getActiveRoles(phase).filter(r => r !== '모더레이터');
+  const sortedRolesF = [...activeRolesF].sort((a, b) => {
+    const ai = FEEDBACK_ROLE_ORDER.indexOf(a); const bi = FEEDBACK_ROLE_ORDER.indexOf(b);
+    return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi);
+  });
+  const myPhaseRole = (!isModerator && state.roleHistory?.[phaseKey]?.[myName]) || myRole;
+  const myPhaseKey = `${safeFirebaseKey(myPhaseRole)}:${myName}`;
+  const allFbEntries = sortedRolesF.flatMap(role => {
     const mission = phase.missions[getBaseRole(role)];
     if (!mission) return [];
-    const entries = getRoleEntries(phaseResponses, participants, role);
-    return entries.map(e => {
-      const savedChecks = phaseScores[safeFirebaseKey(e.key)] ?? null;
-      return buildManualScoreCard(phase, phaseNum, {...e, role}, savedChecks, isModerator);
-    });
-  }).join('');
+    return getRoleEntries(phaseResponses, participants, role).map(e => ({
+      role, entry: e,
+      savedChecks: phaseScores[safeFirebaseKey(e.key)] ?? null,
+      isMe: !isModerator && e.key === myPhaseKey
+    }));
+  });
+  const orderedFbEntries = isModerator ? allFbEntries : [...allFbEntries.filter(c => c.isMe), ...allFbEntries.filter(c => !c.isMe)];
+  const cards = orderedFbEntries.map(c =>
+    buildManualScoreCard(phase, phaseNum, {...c.entry, role: c.role}, c.savedChecks, isModerator, myPhaseKey)
+  ).join('');
 
   const nextPhaseDur = !isLast && ACTIVE_PHASES[phaseNum] ? Math.round(ACTIVE_PHASES[phaseNum].duration / 60) : 5;
   const modControls = myRole === '모더레이터' ? `
@@ -3141,6 +3154,22 @@ function resetPhaseTimer() {
   saveState(state); broadcast('STATE_CHANGED', {}); renderExercise();
 }
 
+// ─── 미제출 채점 일괄 제출 ───────────────────────────────
+function autoSubmitAllScores(state) {
+  const phaseNum = state.currentPhase;
+  const phaseKey = `phase${phaseNum}`;
+  const phaseScores = (state.scores && state.scores[phaseKey]) || {};
+  if (!state.scoreSubmitted) state.scoreSubmitted = {};
+  if (!state.scoreSubmitted[phaseKey] || typeof state.scoreSubmitted[phaseKey] !== 'object') {
+    state.scoreSubmitted[phaseKey] = {};
+  }
+  Object.keys(phaseScores).forEach(roleKey => {
+    if (!state.scoreSubmitted[phaseKey][roleKey]) {
+      state.scoreSubmitted[phaseKey][roleKey] = true;
+    }
+  });
+}
+
 // ─── 채점 제출 / 수정 ────────────────────────────────────
 function submitScores(phaseNum, roleKey) {
   if (myRole !== '모더레이터') return;
@@ -3222,6 +3251,7 @@ function nextPhase() {
   const state = getState();
   if (!state.showingFeedback) {
     state.timerRunning = false; state.showingFeedback = true;
+    autoSubmitAllScores(state);
     saveState(state); broadcast('PHASE_CHANGE', {}); renderExercise();
   } else {
     const next = state.currentPhase + 1;
@@ -3733,6 +3763,10 @@ function showToast(msg) {
 // ═══════════════════════════════════════════════════════
 function escapeHtml(str) {
   return String(str).replace(/<br\s*\/?>/gi,'\n').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/\n/g,'<br>');
+}
+function escapeForTextarea(str) {
+  // textarea 안에서는 \n이 줄바꿈으로 렌더링되므로 <br>로 변환하지 않음
+  return String(str).replace(/<br\s*\/?>/gi,'\n').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 function escAttr(str) {
   return String(str||'').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
