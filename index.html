@@ -1769,6 +1769,7 @@ function copyQRUrl() {
 //  LOGIN
 // ═══════════════════════════════════════════════════════
 let selectedRole = '';
+let qrLobbyMode = false; // QR로 입장 + 대기실(phase 0): 역할 선택 불필요
 
 document.querySelectorAll('.role-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -1785,12 +1786,13 @@ document.querySelectorAll('.role-btn').forEach(btn => {
 document.getElementById('input-name').addEventListener('input', updateJoinBtn);
 function updateJoinBtn() {
   const name = document.getElementById('input-name').value.trim();
-  document.getElementById('btn-join').disabled = !(name && selectedRole && myGroup);
+  document.getElementById('btn-join').disabled = qrLobbyMode ? !name : !(name && selectedRole && myGroup);
 }
 document.getElementById('btn-join').addEventListener('click', async () => {
   const name = document.getElementById('input-name').value.trim();
-  if (!name || !selectedRole) return;
-  myName = name; myRole = selectedRole;
+  if (!name) return;
+  if (!qrLobbyMode && !selectedRole) return;
+  myName = name; myRole = qrLobbyMode ? '미배정' : selectedRole;
   participantsPanelOpen = (myRole === '모더레이터');
 
   const btnJoin = document.getElementById('btn-join');
@@ -2030,11 +2032,11 @@ function renderLobby(body, state) {
     ).join('');
 
   if (myRole === '모더레이터') {
-    const lobbyRolePanel = renderRoleReassignPanel(state);
+    const lobbyRolePanel = renderRoleReassignPanel(state, true);
     body.innerHTML = `<div style="flex:1"><div class="lobby-card" style="margin:0 auto;max-width:520px">
       <div style="font-size:48px;margin-bottom:12px">🎙️</div>
       <h2>진행자 대기실</h2>
-      <p>참가자들이 각자의 역할로 접속하면 훈련을 시작해 주세요.</p>
+      <p>참가자가 접속하면 아래에서 역할을 배정한 후 훈련을 시작하세요.</p>
       <div style="margin:20px 0"><div class="my-role-display">모더레이터 · ${myName}</div></div>
       <div class="waiting-participants">
         <h4>현재 접속 참가자 (${Object.values(participants).length}명)</h4>
@@ -2052,11 +2054,12 @@ function renderLobby(body, state) {
       <button onclick="leaveToLogin()" style="margin-top:10px;width:100%;padding:11px;background:none;border:1px solid var(--border);border-radius:8px;font-size:14px;color:var(--muted);cursor:pointer;font-family:inherit;transition:all 0.2s" onmouseover="this.style.borderColor='var(--primary)';this.style.color='var(--primary)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">← 조 선택 화면으로 돌아가기</button>
     </div></div>`;
   } else {
+    const isUnassigned = myRole === '미배정';
     body.innerHTML = `<div style="flex:1"><div class="lobby-card" style="margin:0 auto">
-      <div style="font-size:48px;margin-bottom:12px">${ROLE_ICONS[myRole]||'👤'}</div>
+      <div style="font-size:48px;margin-bottom:12px">${isUnassigned ? '⏳' : (ROLE_ICONS[myRole]||'👤')}</div>
       <h2>참가자 대기실</h2>
-      <p>모더레이터(진행자)가 훈련을 시작할 때까지 대기해 주세요.</p>
-      <div style="margin:20px 0"><div class="my-role-display">${myRole} · ${myName}</div></div>
+      <p>${isUnassigned ? '모더레이터가 역할을 배정할 때까지 잠시 기다려 주세요.' : '모더레이터(진행자)가 훈련을 시작할 때까지 대기해 주세요.'}</p>
+      <div style="margin:20px 0"><div class="my-role-display">${isUnassigned ? '역할 배정 대기 중' : myRole} · ${myName}</div></div>
       <div class="waiting-participants">
         <h4>현재 접속 참가자 (${Object.keys(participants).length}명)</h4>
         <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden">
@@ -3744,11 +3747,39 @@ window.addEventListener('load', async () => {
         selectScenario(matched.id);
         const grpNum = parseInt(parts[1].replace('조',''));
         if (grpNum) selectGroup(grpNum);
-        const hint = document.querySelector('.session-hint');
-        if (hint) hint.innerHTML = `✅ 방 코드: <strong>${roomParam}</strong> — 이름과 역할을 선택 후 참가해 주세요.<br><small style="color:#e67e22">※ 모더레이터로 재접속하려면 역할에서 모더레이터를 선택하세요.</small>`;
-        // 방 코드 초기화 버튼 표시
         const clearBtn = document.getElementById('btn-clear-room');
         if (clearBtn) clearBtn.style.display = 'block';
+
+        // Firebase에서 방 상태 확인 → 대기실(phase 0) / 진행 중 분기
+        (async () => {
+          let currentPhase = -1;
+          try {
+            const snap = await getRoomRef(roomParam).get();
+            if (snap.exists()) currentPhase = snap.val().currentPhase ?? 0;
+          } catch {}
+
+          const hint = document.getElementById('session-hint-text');
+          if (currentPhase === 0) {
+            // ── 대기실: 역할·조 선택 숨기고 이름만 입력 ──
+            qrLobbyMode = true;
+            const roleWrap = document.getElementById('role-grid')?.closest('.form-group');
+            if (roleWrap) roleWrap.style.display = 'none';
+            const groupWrap = document.getElementById('group-grid')?.closest('.form-group');
+            if (groupWrap) groupWrap.style.display = 'none';
+            if (hint) hint.innerHTML = `
+              <div style="background:#e8f4fd;border:1px solid #3498db;border-radius:8px;padding:12px 14px;text-align:left;line-height:1.6">
+                <strong>📌 ${grpNum}조 · 방 코드: ${roomParam}</strong><br>
+                <span style="font-size:13px;color:#444">이름만 입력하고 참가하세요.<br>모더레이터가 역할을 배정해 드립니다.</span>
+              </div>`;
+            updateJoinBtn();
+          } else if (currentPhase > 0) {
+            // ── 단계 진행 중: 역할 선택 필요 ──
+            if (hint) hint.innerHTML = `✅ 방 코드: <strong>${roomParam}</strong> — 현재 <strong>${currentPhase}단계</strong> 진행 중입니다.<br><small style="color:#e67e22">해당 단계 역할을 선택한 후 참가하세요.</small>`;
+          } else {
+            // 방 없음 / 오류: 기존 안내
+            if (hint) hint.innerHTML = `✅ 방 코드: <strong>${roomParam}</strong> — 이름과 역할을 선택 후 참가해 주세요.<br><small style="color:#e67e22">※ 모더레이터로 재접속하려면 역할에서 모더레이터를 선택하세요.</small>`;
+          }
+        })();
       }
     }
   }
