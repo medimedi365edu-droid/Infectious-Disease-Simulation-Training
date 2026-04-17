@@ -1230,23 +1230,39 @@ function selectScenario(id) {
   // URL에 방 코드가 있으면 Firebase에서 현재 단계를 조회해 역할 필터 갱신
   const urlRoom2 = new URLSearchParams(location.search).get('room');
   if (urlRoom2) {
-    getRoomRef(urlRoom2).get().then(snap => {
+    getRoomRef(urlRoom2).get().then(async snap => {
       if (!snap.exists()) return;
       const roomState = snap.val();
       const curPhase = roomState.currentPhase || 0;
+
+      // Firebase에서 최신 시나리오 직접 조회 (캐시 타이밍 문제 방지)
+      let freshSc = sc;
+      try {
+        const scSnap = await db.ref('settings/scenarios').get();
+        if (scSnap.exists()) {
+          const freshScenarios = scSnap.val();
+          localStorage.setItem('ttx_admin_scenarios', JSON.stringify(freshScenarios));
+          const found = freshScenarios.find(s => s.id === currentScenarioId);
+          if (found) {
+            freshSc = found;
+            ACTIVE_SCENARIO = found;
+            ACTIVE_PHASES = found.phases;
+          }
+        }
+      } catch(e) {}
 
       // 로비(0단계) 또는 1단계: 1단계 역할만 표시 (팝업 없음)
       // 2단계 이후 중간 입장: 해당 단계 역할 표시 + 팝업
       const targetPhaseIdx = (curPhase === 0)
         ? 0 // 로비면 1단계 기준
-        : (roomState.showingFeedback && curPhase < sc.phases.length)
+        : (roomState.showingFeedback && curPhase < freshSc.phases.length)
           ? curPhase
           : curPhase - 1;
-      const targetPhase = sc.phases[targetPhaseIdx];
+      const targetPhase = freshSc.phases[targetPhaseIdx];
       if (!targetPhase) return;
 
       const activeRoles = getActiveRoles(targetPhase);
-      const phase1RolesList = getActiveRoles(sc.phases[0]);
+      const phase1RolesList = getActiveRoles(freshSc.phases[0]);
 
       // 1단계 진입: 활성 역할만 남기고 나머지 숨김 (팝업 없음)
       // 2단계 이후 중간 입장: 팝업 표시
