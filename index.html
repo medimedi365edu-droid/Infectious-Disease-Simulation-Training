@@ -1077,6 +1077,11 @@ function getScenarios() {
 
 function saveScenarios(scenarios) {
   localStorage.setItem('ttx_admin_scenarios', JSON.stringify(scenarios));
+  // Firebase에도 동시 저장 (다른 기기·브라우저에서도 반영)
+  if (typeof db !== 'undefined') {
+    db.ref('settings/scenarios').set(JSON.parse(JSON.stringify(scenarios)))
+      .catch(e => console.warn('시나리오 Firebase 저장 실패:', e));
+  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -3635,6 +3640,15 @@ window.addEventListener('load', async () => {
   try {
     const snap = await db.ref('settings/groupCount').get();
     if (snap.exists()) localStorage.setItem('ttx_group_count', String(snap.val()));
+  } catch(e) {}
+
+  // Firebase에서 시나리오 로드 (관리자가 수정한 내용 동기화)
+  try {
+    const scSnap = await db.ref('settings/scenarios').get();
+    if (scSnap.exists()) {
+      localStorage.setItem('ttx_admin_scenarios', JSON.stringify(scSnap.val()));
+      renderHomeScenarios(); // 시나리오 카드 갱신
+    }
   } catch(e) {}
 
   // URL에 room 파라미터가 있으면 바로 로그인 화면으로 이동
