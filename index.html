@@ -392,6 +392,10 @@
   .fb-phase-title:hover { background: #eef2f7; }
   .fb-phase-badge { padding: 4px 14px; border-radius: 20px; color: white; font-size: 13px; }
   .fb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; padding: 14px 0 4px; }
+  .fb-filter-bar { display:flex; flex-wrap:wrap; gap:6px; margin:12px 0 4px; }
+  .fb-filter-btn { padding:6px 14px; border-radius:20px; border:1.5px solid var(--border); background:white; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; color:var(--muted); transition:all 0.15s; white-space:nowrap; }
+  .fb-filter-btn:hover { border-color:var(--primary); color:var(--primary); }
+  .fb-filter-btn.active { background:var(--primary); color:white; border-color:var(--primary); }
   .fb-card { background: white; border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
   .fb-card-header { padding: 12px 16px; font-weight: 700; font-size: 14px; background: var(--primary); color: white; }
   .my-fb-card { border: 2px solid var(--primary); box-shadow: 0 0 0 3px rgba(26,58,92,0.12); }
@@ -789,6 +793,10 @@
       <h1 id="login-scenario-title">감염병 위기대응<br>협력 훈련</h1>
       <p>Tabletop Exercise · 감염병 대응 모의훈련</p>
     </div>
+    <div class="form-group">
+      <label>조 선택</label>
+      <div class="group-grid" id="group-grid"></div>
+    </div>
     <div class="form-group" id="room-code-group">
       <label>방 코드 입력</label>
       <div style="display:flex;gap:8px;align-items:center">
@@ -796,10 +804,6 @@
         <button type="button" id="room-code-verify-btn" onclick="verifyRoomCode()" style="padding:0 16px;height:44px;background:#1a3a5c;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;transition:background 0.2s" onmouseover="this.style.background='#244f7a'" onmouseout="this.style.background='#1a3a5c'">확인</button>
       </div>
       <div id="room-code-status" style="margin-top:6px;font-size:12px;color:var(--muted)">방 코드를 입력하면 조·역할이 자동으로 설정됩니다.</div>
-    </div>
-    <div class="form-group">
-      <label>조 선택</label>
-      <div class="group-grid" id="group-grid"></div>
     </div>
     <p class="session-hint" id="session-hint-text" style="display:none">※ 모더레이터가 QR 코드나 링크를 공유하면 자동으로 방에 연결됩니다</p>
     <div class="form-group">
@@ -1174,8 +1178,9 @@ function getRoleEntries(phaseResponses, participants, role) {
     return [{ name: null, key: role, text: phaseResponses[role] || '', submitted: phaseResponses[`${role}_submitted`] || false, isProxy: phaseResponses[`${role}_proxy`] || false }];
   }
   return people.map(p => {
-    const k = `${safeFirebaseKey(role)}:${p.name}`;
-    return { name: p.name, key: k, text: phaseResponses[k] || '', submitted: phaseResponses[`${k}_submitted`] || false, isProxy: false };
+    const personName = p.name || Object.entries(participants).find(([,val]) => val === p)?.[0] || '';
+    const k = `${safeFirebaseKey(role)}:${personName}`;
+    return { name: personName, key: k, text: phaseResponses[k] || '', submitted: phaseResponses[`${k}_submitted`] || false, isProxy: false };
   });
 }
 // 역할 전체 제출 여부 (1명 이상 제출)
@@ -1526,7 +1531,10 @@ function normalizeState(data) {
   let participants = {};
   if (rawPart && typeof rawPart === 'object') {
     Object.entries(rawPart).forEach(([k, v]) => {
-      if (v && typeof v === 'object' && v.role) participants[k] = v;
+      if (v && typeof v === 'object' && v.role) {
+        // name 필드가 누락됐으면 Firebase 키(= 이름)로 보완
+        participants[k] = v.name ? v : { ...v, name: k };
+      }
     });
   }
   // responses 안의 각 phase도 null 체크
@@ -2987,9 +2995,25 @@ function renderPhaseFeedback(body, state) {
     }));
   });
   const orderedFbEntries = isModerator ? allFbEntries : [...allFbEntries.filter(c => c.isMe), ...allFbEntries.filter(c => !c.isMe)];
-  const cards = orderedFbEntries.map(c =>
-    buildManualScoreCard(phase, phaseNum, {...c.entry, role: c.role}, c.savedChecks, isModerator, myPhaseKey)
-  ).join('');
+
+  const ROLE_SHORT = { '담임교사':'담임', '보건(담당)교사':'보건', '영양(교)사':'영양', '행정실':'행정실', '교장/교감':'교장/교감', '교육(지원)청':'교육청', '유관기관':'유관기관' };
+  let filterBarHtml = '';
+  let cards = '';
+  if (!isModerator) {
+    const filterRoles = sortedRolesF.filter(r => phase.missions[getBaseRole(r)]);
+    filterBarHtml = `<div class="fb-filter-bar" id="fb-filter-bar">
+      <button class="fb-filter-btn active" data-filter="all" onclick="filterFbCards('all')">전체</button>
+      <button class="fb-filter-btn" data-filter="me" onclick="filterFbCards('me')">나</button>
+      ${filterRoles.map(r => `<button class="fb-filter-btn" data-filter="${r}" onclick="filterFbCards('${r}')">${ROLE_SHORT[r]||r}</button>`).join('')}
+    </div>`;
+    cards = orderedFbEntries.map(c =>
+      `<div class="fb-card-wrap" data-role="${c.role}" data-is-me="${c.isMe}">${buildManualScoreCard(phase, phaseNum, {...c.entry, role: c.role}, c.savedChecks, isModerator, myPhaseKey)}</div>`
+    ).join('');
+  } else {
+    cards = orderedFbEntries.map(c =>
+      buildManualScoreCard(phase, phaseNum, {...c.entry, role: c.role}, c.savedChecks, isModerator, myPhaseKey)
+    ).join('');
+  }
 
   const nextPhaseDur = !isLast && ACTIVE_PHASES[phaseNum] ? Math.round(ACTIVE_PHASES[phaseNum].duration / 60) : 5;
   const modControls = myRole === '모더레이터' ? `
@@ -3025,8 +3049,24 @@ function renderPhaseFeedback(body, state) {
     </div>
     ${renderRoleAnnouncementBanner(state)}
     ${myRole === '모더레이터' ? renderRoleReassignPanel(state) : ''}
+    ${filterBarHtml}
     <div class="fb-grid">${cards}</div>
   </div>`;
+}
+
+function filterFbCards(filter) {
+  document.querySelectorAll('.fb-filter-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.filter === filter);
+  });
+  document.querySelectorAll('.fb-card-wrap').forEach(wrap => {
+    if (filter === 'all') {
+      wrap.style.display = '';
+    } else if (filter === 'me') {
+      wrap.style.display = wrap.dataset.isMe === 'true' ? '' : 'none';
+    } else {
+      wrap.style.display = wrap.dataset.role === filter ? '' : 'none';
+    }
+  });
 }
 
 function renderParticipantsList(state, phaseNum) {
