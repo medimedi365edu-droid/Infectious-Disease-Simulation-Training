@@ -3583,9 +3583,22 @@ function saveAdminScenario(idx) {
     });
   });
 
-  saveScenarios(scenarios);
-  showToast();
+  // localStorage 즉시 저장
+  localStorage.setItem('ttx_admin_scenarios', JSON.stringify(scenarios));
   renderAdminSidebar();
+  showToast('⏳ 서버에 저장 중...');
+
+  // Firebase에 직접 저장하고 결과 확인
+  if (typeof db !== 'undefined') {
+    db.ref('settings/scenarios').set(JSON.parse(JSON.stringify(scenarios)))
+      .then(() => showToast('✅ 서버 저장 완료! 모든 기기에 반영됩니다.'))
+      .catch(e => {
+        console.error('Firebase 시나리오 저장 실패:', e);
+        showToast('⚠️ 서버 저장 실패 — Firebase 규칙을 확인하세요');
+      });
+  } else {
+    showToast('✅ 로컬 저장 완료 (Firebase 미연결)');
+  }
 }
 
 function addNewScenario() {
