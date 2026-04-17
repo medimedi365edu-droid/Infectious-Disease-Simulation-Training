@@ -1172,6 +1172,9 @@ function kwMatch(text, kw) {
 }
 // ═══════════════════════════════════════════════════════
 //  ACTIVE SESSION STATE
+// 배포 URL (로컬 파일로 실행 시 QR코드에 이 주소를 사용)
+const PRODUCTION_URL = 'https://medimedi365edu-droid.github.io/Infectious-Disease-Simulation-Training/';
+
 // ═══════════════════════════════════════════════════════
 let currentScenarioId = '';
 let ACTIVE_SCENARIO = null;
@@ -1445,11 +1448,19 @@ async function joinRoom(code) {
   myGroup = data.groupNum || '';
   STORAGE_KEY = `ttx_${currentScenarioId}_g${myGroup}_v1`;
   CHANNEL_NAME = `ttx_${currentScenarioId}_g${myGroup}_ch`;
-  const scenarios = getScenarios();
-  const sc = scenarios.find(s => s.id === currentScenarioId);
-  if (sc) {
-    ACTIVE_SCENARIO = sc;
-    ACTIVE_PHASES = sc.phases;
+  // Firebase에서 최신 시나리오 직접 로드 (관리자 수정사항 즉시 반영)
+  try {
+    const scSnap = await db.ref('settings/scenarios').get();
+    if (scSnap.exists()) {
+      const freshScenarios = scSnap.val();
+      localStorage.setItem('ttx_admin_scenarios', JSON.stringify(freshScenarios));
+      const sc = freshScenarios.find(s => s.id === currentScenarioId);
+      if (sc) { ACTIVE_SCENARIO = sc; ACTIVE_PHASES = sc.phases; }
+    }
+  } catch {}
+  if (!ACTIVE_SCENARIO) {
+    const sc = getScenarios().find(s => s.id === currentScenarioId);
+    if (sc) { ACTIVE_SCENARIO = sc; ACTIVE_PHASES = sc.phases; }
   }
   // 즉시 캐시에 저장 (listenRoom 첫 이벤트 전에도 getState()가 정상 동작하도록)
   _cachedState = normalizeState(data);
@@ -1689,7 +1700,9 @@ function showQRModal(code) {
   const label = document.getElementById('qr-room-label');
   const urlText = document.getElementById('qr-url-text');
   box.innerHTML = '';
-  const url = new URL(location.href);
+  const baseHref = (location.protocol === 'file:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+    ? PRODUCTION_URL : location.href;
+  const url = new URL(baseHref);
   url.searchParams.set('room', code);
   const fullUrl = url.toString();
   label.textContent = '방 코드: ' + code;
