@@ -3642,14 +3642,31 @@ window.addEventListener('load', async () => {
     if (snap.exists()) localStorage.setItem('ttx_group_count', String(snap.val()));
   } catch(e) {}
 
-  // Firebase에서 시나리오 로드 (관리자가 수정한 내용 동기화)
-  try {
-    const scSnap = await db.ref('settings/scenarios').get();
-    if (scSnap.exists()) {
-      localStorage.setItem('ttx_admin_scenarios', JSON.stringify(scSnap.val()));
-      renderHomeScenarios(); // 시나리오 카드 갱신
-    }
-  } catch(e) {}
+  // Firebase 시나리오 실시간 리스너 (관리자 수정 즉시 전체 반영)
+  db.ref('settings/scenarios').on('value', (snap) => {
+    if (!snap.exists()) return;
+    try {
+      const scenarios = snap.val();
+      localStorage.setItem('ttx_admin_scenarios', JSON.stringify(scenarios));
+
+      // 홈 화면 시나리오 카드 갱신
+      renderHomeScenarios();
+
+      // 현재 진행 중인 세션의 시나리오도 즉시 갱신
+      if (currentScenarioId) {
+        const updated = scenarios.find(s => s.id === currentScenarioId);
+        if (updated) {
+          ACTIVE_SCENARIO = updated;
+          ACTIVE_PHASES = updated.phases;
+          // 훈련 화면이 열려 있으면 재렌더링
+          const exScreen = document.getElementById('screen-exercise');
+          if (exScreen && exScreen.style.display !== 'none') {
+            renderExercise();
+          }
+        }
+      }
+    } catch(e) {}
+  });
 
   // URL에 room 파라미터가 있으면 바로 로그인 화면으로 이동
   const urlParams = new URLSearchParams(location.search);
